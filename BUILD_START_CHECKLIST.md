@@ -1,6 +1,6 @@
 # Build start checklist
 
-V1 pre-build readiness is complete, and the V1 build is now in progress. M1–M3 are committed and pushed. M4's portable implementation and verification pass are complete; Studio checks remain pending.
+V1 pre-build readiness is complete, and the V1 build is in progress. M1–M4 are committed and pushed; M5 is next. Studio checks remain pending.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -20,14 +20,14 @@ V1 pre-build readiness is complete, and the V1 build is now in progress. M1–M3
 | M3 | **PORTABLE PASS; STUDIO PENDING** | Capsule, creature, sale, slot, stand projection, and centralized action code pass the 37-test suite and Rojo build. Studio kiosk and visual stand checks remain pending. |
 | M4 | **PORTABLE PASS; STUDIO PENDING** | Mutation catalog, catalyst/tutorial/normal roll services, choices, pity, locks, and protocol pass 48 tests and Rojo build. Studio station checks remain pending. |
 | M5–M12 | **READY TO IMPLEMENT** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
-| Git | **M4 COMMIT/PUSH IN PROGRESS** | `main` and `origin/main` are at the M4 kickoff documentation commit `dc446504775306610110fc35b93e894c1556f017`; M4 code is locally verified and closing in a focused milestone commit. |
+| Git | **PASS — SYNCHRONIZED** | `main` and `origin/main` are synchronized; M4 implementation commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is included. |
 
 Historical copies of the paused M3 work remain in local stashes after the M3 implementation was committed.
 
 ## Human-only action
 
-Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke, M1/M2 join/DataStore checks, M3 kiosk/stand smoke, and M4 mutation-station checks in [tests/multiplayer/README.md](tests/multiplayer/README.md).
+Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke, M1/M2 join/DataStore checks, M3 kiosk/stand smoke, and M4 mutation-station checks in [tests/multiplayer/README.md](tests/multiplayer/README.md). Add the M5 Raid-clock/grace Studio checks when that milestone is implemented.
 
 ## Verdict
 
-**BUILD IN PROGRESS** — the locked V1 plan is being implemented milestone by milestone. Studio-only checks remain explicit and do not block portable M4 work.
+**BUILD IN PROGRESS** — the locked V1 plan is being implemented milestone by milestone. Studio-only checks remain explicit and do not block portable milestone work.

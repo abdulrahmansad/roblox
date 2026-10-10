@@ -1,14 +1,11 @@
 # Project status
 
-Status: V1 implementation is in progress at **M4 — Mutations**. M1–M3 are committed and pushed. M4's portable implementation and full local verification pass are complete; its focused commit and push are being closed. Studio checks remain pending. The V1 design remains frozen.
+Status: V1 implementation is in progress; **M4 — Mutations** is committed and pushed, and **M5 — Raid state and arrival grace** is next. M1–M4 portable implementations and local verification are complete. Studio checks remain pending. The V1 design remains frozen.
 
-## Current milestone: M4
+## Current milestone: M5 — Raid state and arrival grace
 
-- Implemented the approved mutation catalog, 60-Scrap catalyst purchase, free chosen-theme tutorial Common, 100-Scrap normal roll, one shared Rare-or-better pity counter, and KeepCurrent/Replace/Decline choices.
-- Normal mutation results are server-selected and charged atomically with their catalyst and pity update. Pending results stay server-side, lock their creature, and clear on disconnect or entry to RAID/RESOLUTION without refunding the already-committed roll.
-- `GetSnapshot` includes normal odds and the exact next roll before confirmation; Mythic remains exactly 0.1%, including while rare pity is active.
-- `./scripts/verify.ps1` passes formatting, Selene (0 warnings/errors), 48 Lune tests, and the Rojo build. Studio mutation-station range/presentation checks remain pending because Roblox Studio is unavailable.
-- M3 remains portable-verified as summarized below; engine-backed Studio checks remain pending.
+- M5 is the next planned milestone. It will implement the shared 8-minute Raid phase cycle, server Raid IDs, phase presentation contract, and symmetric 15-second grace for a player who joins during RAID. Theft and Tag remain out of scope for M5.
+- M1–M4 portable implementations are committed and pushed. M4 passed formatting, Selene (0 warnings/errors), 48 Lune tests, and the Rojo build; Studio checks remain pending because Roblox Studio is unavailable.
 
 ## M3 — Capsules, sales, and capacity
 
@@ -23,6 +20,7 @@ Status: V1 implementation is in progress at **M4 — Mutations**. M1–M3 are co
 - **M1 — Session and base:** eight deterministic base slots, temporary greybox, join/leave lifecycle, character spawn relocation, phase snapshot inheritance, operational readiness, and cleanup. Portable checks pass; Studio checks are pending.
 - **M2 — Starter and online income:** validated profile defaults and persistence adapter, session lock/save/retry coverage, stable starter, exact 40 Scrap/min income, online-only 10-second payouts with fractional carry, and leaderboard values. Portable checks pass; live DataStore and Studio checks are pending.
 - **M3 — Capsules, sales, and capacity:** portable implementation and verification pass as described above; Studio check pending. Commit `10a4f4846c79d89fbe13424abcaffb93f7f0e273` is pushed to `origin/main`.
+- **M4 — Mutations:** portable implementation and verification pass; Studio mutation-station checks remain pending. Commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is pushed to `origin/main`.
 
 ## Locked planning contracts
 
@@ -42,4 +40,4 @@ M5–M12 remain: timed Raid state, theft/Tag/recovery, persistence hardening and
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. The synchronized M3 code commit is `10a4f4846c79d89fbe13424abcaffb93f7f0e273`; `origin/main` is at the M4 kickoff documentation commit `dc446504775306610110fc35b93e894c1556f017`. M4 code/docs pass local verification and the focused milestone commit/push is in progress. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M4 implementation commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is included on `main`; the branch is synchronized with `origin/main`. Historical M3 backup copies remain in the local stashes.
