@@ -1,6 +1,6 @@
 # Implementation milestones M0–M12
 
-These are future implementation slices. The design is frozen; follow [GAME_DESIGN.md](GAME_DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md), and [STATE_MACHINES.md](STATE_MACHINES.md). Do not start implementation as part of this readiness task. Dependencies determine execution order; milestone numbers identify scope.
+These are the implementation contracts for the authorized V1 build. The design is frozen; follow [GAME_DESIGN.md](GAME_DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md), and [STATE_MACHINES.md](STATE_MACHINES.md). Work in dependency order and do not skip ahead. Milestone numbers identify scope.
 
 Each accepted milestone closes with one focused commit containing only its implementation, tests, and the docs listed below. Do not batch unrelated milestones. If acceptance fails, keep work in the same milestone and do not mark it complete.
 
@@ -21,8 +21,9 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Non-goals:** Creature income, capsules, mutation, timed raids, theft, cosmetics.
 - **Dependencies:** M0; `SessionService`, `BaseService`, `PlayerDataService` composition.
 - **Player-visible result:** Player enters one assigned base; leaving releases it for another player.
-- **Tests:** Unit/service join/leave, duplicate assignment, all eight bases, character reset, failed profile load; Studio two-client join/leave.
+- **Tests:** Unit/service join/leave, duplicate assignment, all eight bases, character reset, failed profile load; Studio two-client join/leave (pending Studio installation).
 - **Acceptance:** No duplicate plot; no ninth assignment; reset does not duplicate/release the base; failed load does not expose an unready profile; join/leave cleans up exactly once.
+- **Current evidence:** Portable session/base/phase tests and Rojo build pass; Studio join/leave remains unverified while Studio is unavailable.
 - **Docs:** `ARCHITECTURE.md`, `TESTING.md`, `PROJECT_STATUS.md` if workflow changes.
 - **Commit boundary:** One session/base commit with its tests and no economy behavior.
 

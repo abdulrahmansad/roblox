@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. `tests/run.luau` contains real checks against the shared protocol and server request service, including malformed client-style input.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. `tests/run.luau` checks the shared protocol and server request service, malformed client-style input, base allocation, phase-state transitions, and session lifecycle behavior.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -39,7 +39,7 @@ This engine-backed command was not run during bootstrap because Roblox Studio is
 
 ## Future implementation test matrix
 
-These are required cases for the listed milestone; they are not implemented gameplay tests. Add each assertion with the behavior it protects. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
+These are required cases for the listed milestones; later gameplay coverage is not implemented yet. M1 has portable base/session/phase tests. Add assertions with the behavior they protect as each system is built. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
 
 | Area | Cases and expected result | Test layer / milestone |
 | --- | --- | --- |
@@ -54,6 +54,6 @@ These are required cases for the listed milestone; they are not implemented game
 | Studio UX / performance | M0 DevPing smoke, two-client server/client startup, interaction feedback, mobile touch targets and reduced effects; then 6–8 client join/leave and load scenarios; no duplicate assignments, transfers, stale ownership, or phase drift. | Studio manual/automated; M0, M1, M8–M10 |
 | Monetization | Future pass entitlement refresh and receipt/purchase path are server-owned, idempotent, retry-safe, and cosmetic-only. This readiness phase creates no product IDs or remotes. | Service integration + Studio; M11 |
 
-These are future behavior tests for gameplay implementation; this readiness work adds no runtime code or gameplay tests. The complete milestone-to-test mapping is in [MILESTONES.md](MILESTONES.md).
+The complete milestone-to-test mapping is in [MILESTONES.md](MILESTONES.md). Studio-only coverage remains pending until Studio is installed and signed in.
 
 Add tests alongside behavior; do not create always-pass placeholders.

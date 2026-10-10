@@ -1,6 +1,6 @@
 # Architecture
 
-V1 uses one server-authoritative service layer, a small shared definitions/protocol layer, and client controllers for input and display. This is a locked implementation plan, not permission to implement gameplay during the readiness phase.
+V1 uses one server-authoritative service layer, a small shared definitions/protocol layer, and client controllers for input and display. This is the locked implementation plan for the authorized V1 build.
 
 ## Source of truth and runtime mapping
 
@@ -17,7 +17,7 @@ Network names and message shapes live in `src/shared/network/Protocol.luau`. Ser
 
 ## Planned module map
 
-All rows below describe future modules. The repository currently has only the foundation bootstrap, DevPing smoke, and persistence/analytics/monetization contracts; no gameplay services or controllers are implemented.
+The module map is the locked V1 target. The M1 implementation currently includes shared constants, base/session services, a Raid phase-state skeleton, and a temporary greybox with eight base pads. The economy, creatures, capsules, mutations, theft, persistence, UI, analytics integration, and monetization modules remain unimplemented.
 
 | Module and location | Responsibility and authority | Dependencies / public interface | Required tests |
 | --- | --- | --- | --- |

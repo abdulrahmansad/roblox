@@ -1,27 +1,32 @@
 # Project status
 
-Status: pre-build readiness documentation is complete. V1 design is frozen. No gameplay/runtime system was implemented in this phase. The remaining build gate is the human-only Roblox Studio/Rojo M0 smoke listed in [BUILD_START_CHECKLIST.md](../BUILD_START_CHECKLIST.md).
+Status: M1 session/base code is implemented and passes local verification. M0 Studio validation and M1 Studio join/leave validation remain human-blocked because Roblox Studio is not installed. Continue with M2 after this milestone is committed; do not claim M1's Studio integration as passed.
 
-## Locked planning contracts
+## Current milestone
 
-- Approved V1 scope and player-facing design: [GAME_DESIGN.md](GAME_DESIGN.md), with the final Welcome protection boundary in [RAIDS.md](RAIDS.md).
-- Planned module ownership and dependencies: [ARCHITECTURE.md](ARCHITECTURE.md).
-- Exact profile fields, defaults, migration and corruption rules: [DATA_MODEL.md](DATA_MODEL.md).
-- Planned request/result/event shapes and server validation: [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md).
-- Raid, theft, mutation and Welcome participation transitions: [STATE_MACHINES.md](STATE_MACHINES.md).
-- Future behavior and Studio test coverage: [TESTING.md](TESTING.md).
-- M0–M12 scope, dependencies, acceptance, documentation and commit boundaries: [MILESTONES.md](MILESTONES.md).
+**M1 — Session and base**
 
-## Tooling and verification
+- Implemented: eight deterministic base slots, a temporary eight-pad greybox, join/leave session lifecycle, character spawn relocation, operational readiness, server phase snapshot inheritance, and cleanup on reset/leave.
+- The M1 profile readiness hook is injectable and covered for failure; it currently defaults to success because M2/M7 persistence is not implemented yet.
+- Portable verification: `./scripts/verify.ps1` passed formatting, Selene (0 errors/warnings), 11 Lune tests, and Rojo build.
+- Studio two-client join/leave and visual spawn checks: pending.
 
-The pinned tools match `rokit.toml`: Rokit 1.2.0, Rojo 7.7.1, Wally 0.3.2, StyLua 2.5.2, Selene 0.32.0, and Lune 0.10.5. Wally TestEZ 0.4.1 is installed in the ignored development package directory.
+## Completed planning contracts
 
-The canonical `./scripts/verify.ps1` passed formatting, lint (0 errors/warnings/parse errors), all four portable tests, and the Rojo build. The bundled skill validator passed all seven `.agents/skills` folders. Local Markdown links were checked. `./scripts/serve.ps1` started Rojo on `localhost:34872`; the local HTTP endpoint returned 200. `default.project.json` built successfully. The serve process was stopped after the check.
+- V1 scope and balance remain frozen in [GAME_DESIGN.md](GAME_DESIGN.md), [MVP.md](MVP.md), and the linked design documents.
+- The implementation contracts remain in [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md), and [STATE_MACHINES.md](STATE_MACHINES.md).
+- M0–M12 acceptance and commit boundaries remain in [MILESTONES.md](MILESTONES.md).
 
-## Studio status
+## Toolchain and Rojo
 
-Roblox Studio was not detected in PATH, installed Appx packages, or the local Roblox Studio installation/plugin locations inspected for this task. Studio login and Rojo plugin connection therefore could not be verified. The documented two-client M0 smoke remains pending; no Studio success is claimed. Install Studio, sign in, install the Rojo 7 plugin, connect to the local Rojo server, and complete [the two-client smoke](../tests/multiplayer/README.md).
+Pinned tools are installed at the committed versions: Rokit 1.2.0, Rojo 7.7.1, Wally 0.3.2, StyLua 2.5.2, Selene 0.32.0, and Lune 0.10.5. TestEZ 0.4.1 is present in the ignored Wally package directory.
 
-## Git status
+The latest `./scripts/verify.ps1` run passed. The `default.project.json` Rojo build succeeded. `./scripts/serve.ps1` listened on `localhost:34872` and returned HTTP 200; the serve process was stopped after the check.
 
-The readiness changes are committed on `main` and pushed to the configured `origin` at `https://github.com/abdulrahmansad/roblox.git`. Remote `main` matches local HEAD and the worktree is clean. No force push was used.
+## Studio blocker
+
+Roblox Studio is not detected in PATH, the expected LocalAppData/Program Files installation folders, Appx packages, or the local plugin folder. Studio login and Rojo plugin sync cannot be checked. The exact human step is: install and sign in to Roblox Studio, install the Rojo 7 plugin, connect to `localhost:34872`, and complete the M0/M1 two-client smoke in [tests/multiplayer/README.md](../tests/multiplayer/README.md).
+
+## Remaining implementation
+
+M2–M12 are not started. The economy, creature catalog runtime, capsules, mutations, timed Raid cycle, theft/Tag, persistence, onboarding/UI, art/map/audio content, hostile playtest, cosmetic pass, and release gates remain. No Studio-based performance, mobile, security, or multiplayer claim is made.

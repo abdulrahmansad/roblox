@@ -14,7 +14,7 @@ Post-launch candidates are limited to additional cosmetic palettes, creature ski
 
 ## Milestone plan
 
-These are future implementation slices. This design-only task does not begin them. Each milestone should leave a playable/testable result and must meet its acceptance criteria before the next slice grows the scope.
+These are implementation slices for the authorized V1 build. Each milestone should leave a playable/testable result and must meet its acceptance criteria before the next slice grows the scope.
 
 The actionable M0–M12 contracts, dependencies, test gates, documentation updates, and commit boundaries are in [MILESTONES.md](MILESTONES.md). Architecture, profile, network, state-machine, and detailed test contracts are in [ARCHITECTURE.md](ARCHITECTURE.md), [DATA_MODEL.md](DATA_MODEL.md), [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md), [STATE_MACHINES.md](STATE_MACHINES.md), and [TESTING.md](TESTING.md).
 

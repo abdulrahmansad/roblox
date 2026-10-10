@@ -1,6 +1,6 @@
 # Roblox game foundation
 
-This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The development foundation and locked MVP design are documented here. The game design is complete for planning, but gameplay systems have not been implemented.
+This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The V1 design is frozen. M1 session/base services and an eight-plot blockout are implemented; economy, creature collection, mutation, raids, theft, persistence, and presentation milestones remain.
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 # V1 persistent data model
 
-This is the planned server-owned player profile for V1. It is a specification only; no DataStore, profile library, or runtime persistence code is added in the readiness phase. `schemaVersion` is `1`. The profile is the minimum durable state needed to resume progression and resolve the Welcome first-Raid rule deterministically.
+This is the planned server-owned player profile for V1. `schemaVersion` is `1`. It remains a specification until M2/M7 implement the profile loader and persistence boundary; no DataStore or profile-library integration exists yet. The profile is the minimum durable state needed to resume progression and resolve the Welcome first-Raid rule deterministically.
 
 ## Profile schema
 
