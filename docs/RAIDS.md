@@ -1,5 +1,7 @@
 # Raid and theft rules
 
+M5 implements the shared phase clock, Raid IDs, replicated phase snapshots/events, countdown presentation, and runtime join grace. Welcome first-Raid participation/protection transitions, theft, Tag, and recovery remain M6 work; the rules below stay authoritative for those upcoming implementations. Studio and multiplayer validation are tracked separately in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
 ## Shared raid cycle
 
 Each server instance runs one server-owned cycle. A fresh instance starts with 5 minutes of PEACE. Players who join an existing instance enter its current phase; there is no personal timer.

@@ -1,11 +1,11 @@
 # Project status
 
-Status: V1 implementation is in progress; **M4 — Mutations** is committed and pushed, and **M5 — Raid state and arrival grace** is next. M1–M4 portable implementations and local verification are complete. Studio checks remain pending. The V1 design remains frozen.
+Status: V1 implementation is in progress; **M5 — Raid state and arrival grace** has passed portable acceptance and **M6 — Theft, Tag, recovery, and Welcome protection** is next. M1–M5 portable implementations and local verification are complete. Studio checks remain pending. The V1 design remains frozen.
 
-## Current milestone: M5 — Raid state and arrival grace
+## Current milestone: M6 — Theft, Tag, recovery, and Welcome protection
 
-- M5 is the next planned milestone. It will implement the shared 8-minute Raid phase cycle, server Raid IDs, phase presentation contract, and symmetric 15-second grace for a player who joins during RAID. Theft and Tag remain out of scope for M5.
-- M1–M4 portable implementations are committed and pushed. M4 passed formatting, Selene (0 warnings/errors), 48 Lune tests, and the Rojo build; Studio checks remain pending because Roblox Studio is unavailable.
+- M5 implements the shared 8-minute Raid phase cycle, server Raid IDs, replicated phase timing, a client countdown, and runtime 15-second grace for a player who joins during RAID. Its failed-session path also clears every replicated Raid attribute. `./scripts/verify.ps1` passes formatting, Selene (0 warnings/errors), 56 Lune tests, and the Rojo build.
+- M6 will connect this clock/grace to theft, Tag, recovery, and the durable Welcome first-Raid participation transition. The design and acceptance criteria remain locked in `docs/MILESTONES.md` and `docs/RAIDS.md`.
 
 ## M3 — Capsules, sales, and capacity
 
@@ -21,6 +21,7 @@ Status: V1 implementation is in progress; **M4 — Mutations** is committed and 
 - **M2 — Starter and online income:** validated profile defaults and persistence adapter, session lock/save/retry coverage, stable starter, exact 40 Scrap/min income, online-only 10-second payouts with fractional carry, and leaderboard values. Portable checks pass; live DataStore and Studio checks are pending.
 - **M3 — Capsules, sales, and capacity:** portable implementation and verification pass as described above; Studio check pending. Commit `10a4f4846c79d89fbe13424abcaffb93f7f0e273` is pushed to `origin/main`.
 - **M4 — Mutations:** portable implementation and verification pass; Studio mutation-station checks remain pending. Commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is pushed to `origin/main`.
+- **M5 — Raid state and arrival grace:** portable implementation and verification pass. Exact phase timing, Raid IDs, phase snapshots/events, countdown presentation, operational-readiness grace, and reset/rejoin behavior are covered; Studio phase presentation and multiplayer checks remain pending.
 
 ## Locked planning contracts
 
@@ -32,12 +33,12 @@ Status: V1 implementation is in progress; **M4 — Mutations** is committed and 
 
 Pinned tools: Rokit 1.2.0, Rojo 7.7.1, Wally 0.3.2, StyLua 2.5.2, Selene 0.32.0, and Lune 0.10.5. The current full verification passes, including Rojo build. The Rojo serve workflow was previously verified at `localhost:34872` with HTTP 200.
 
-Roblox Studio is not detected in the inspected PATH, LocalAppData/Program Files locations, Appx packages, or local plugin folder. Studio login and Rojo plugin status therefore cannot be checked. The human action is to install/sign in to Studio, install the Rojo 7 plugin, connect to `localhost:34872`, then run the M0 two-client smoke and M1/M2/M3 Studio checks documented in [tests/multiplayer/README.md](../tests/multiplayer/README.md). This does not block the remaining portable milestones.
+Roblox Studio was not detected in the previously inspected PATH, LocalAppData/Program Files locations, Appx packages, or local plugin folder. Studio login and Rojo plugin status therefore cannot be checked. The human action is to install/sign in to Studio, install the Rojo 7 plugin, connect to `localhost:34872`, then run the M0–M5 Studio checks documented in [tests/multiplayer/README.md](../tests/multiplayer/README.md). This does not block the remaining portable milestones.
 
 ## Remaining work
 
-M5–M12 remain: timed Raid state, theft/Tag/recovery, persistence hardening and transfer journals, mobile onboarding/UI, V1 map/content/audio, hostile playtest and balance, the approved cosmetic pass after gameplay gates, and release readiness. M0–M4 engine-backed checks, 6–8-player validation, mobile/device testing, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
+M6–M12 remain: theft/Tag/recovery and Welcome transitions, persistence hardening and transfer journals, mobile onboarding/UI, V1 map/content/audio, hostile playtest and balance, the approved cosmetic pass after gameplay gates, and release readiness. M0–M5 engine-backed checks, 6–8-player validation, mobile/device testing, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M4 implementation commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is included on `main`; the branch is synchronized with `origin/main`. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M5 is being closed as a focused commit and will be pushed after verification. Historical M3 backup copies remain in the local stashes.

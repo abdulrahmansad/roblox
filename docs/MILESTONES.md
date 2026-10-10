@@ -69,8 +69,9 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Non-goals:** Theft, Tag, weapons, private timers, phase manipulation.
 - **Dependencies:** M1; `RaidService`, `BaseService`, shared raid config.
 - **Player-visible result:** All players see the same phase/countdown; a mid-RAID arrival can get ready before attacking or being targeted.
-- **Tests:** Exact durations and boundaries; join in every phase; readiness starts grace; both inbound/outbound grace checks; reset/rejoin in same Raid does not refresh; fake clock boundary tests.
-- **Acceptance:** One clock per server; exact phase order; joins inherit current state; grace is 15 seconds from operational readiness and never extends or pauses Raid.
+- **Tests:** Exact durations and boundaries; join in every phase; readiness starts grace; one server-owned grace query is available to both eligibility checks; reset/rejoin in same Raid does not refresh; fake clock boundary tests. M6 integration proves incoming and outgoing theft are both blocked while grace is active.
+- **Acceptance:** One clock per server; exact phase order; joins inherit current state; grace is 15 seconds from operational readiness and never extends or pauses Raid. M6 consumes the shared server query for both theft directions.
+- **Current evidence:** Portable acceptance passes: exact phase durations/boundaries, drift-free catch-up, one Heartbeat binding, Raid IDs, phase snapshots/change signal, joins in every phase, operational-readiness grace, strict expiry, late join, reset/rejoin behavior, invalid phase-action rejection, and cleanup after failed session initialization. `./scripts/verify.ps1` passes formatting, Selene (0 errors/warnings), 56 Lune tests, and Rojo build. Studio phase presentation and multiplayer join/reset checks remain pending; Welcome participation transitions are M6 scope.
 - **Docs:** `RAIDS.md`, `STATE_MACHINES.md`, `NETWORK_PROTOCOL.md`, `TESTING.md`, `PLAYER_FLOW.md`.
 - **Commit boundary:** One Raid clock/grace commit without theft or Tag.
 

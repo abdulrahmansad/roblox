@@ -1,6 +1,22 @@
 local SessionService = {}
 SessionService.__index = SessionService
 
+local Protocol = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.network.Protocol)
+    else require("../../shared/network/Protocol")
+local PLAYER_ATTRIBUTES = Protocol.PlayerAttributeNames
+local RAID_ATTRIBUTES = table.freeze({
+    PLAYER_ATTRIBUTES.RaidPhase,
+    PLAYER_ATTRIBUTES.RaidPhaseStartedAtUnix,
+    PLAYER_ATTRIBUTES.RaidPhaseEndsAtUnix,
+    PLAYER_ATTRIBUTES.RaidId,
+    PLAYER_ATTRIBUTES.RaidRevision,
+    PLAYER_ATTRIBUTES.RaidServerTimeUnix,
+    PLAYER_ATTRIBUTES.ArrivalGraceRaidId,
+    PLAYER_ATTRIBUTES.ArrivalGraceStartedAtUnix,
+    PLAYER_ATTRIBUTES.ArrivalGraceEndsAtUnix,
+})
+
 local function defaultIsPlayer(player: any): boolean
     return typeof(player) == "Instance" and player:IsA("Player")
 end
@@ -36,6 +52,12 @@ end
 local function setAttribute(player: any, name: string, value: any)
     if type(player.SetAttribute) == "function" then
         player:SetAttribute(name, value)
+    end
+end
+
+local function clearRaidAttributes(player: any)
+    for _, attributeName in RAID_ATTRIBUTES do
+        setAttribute(player, attributeName, nil)
     end
 end
 
@@ -84,9 +106,22 @@ function SessionService._getUserId(self: any, player: any): number?
     return userId
 end
 
-function SessionService._applyPhase(session: any, phase: string)
-    session.phase = phase
-    setAttribute(session.player, "OddlingsRaidPhase", phase)
+function SessionService._applyPhase(session: any, snapshot: any)
+    session.phase = snapshot.phase
+    session.phaseStartedAtUnix = snapshot.phaseStartedAtUnix
+    session.phaseEndsAtUnix = snapshot.phaseEndsAtUnix
+    session.raidId = snapshot.raidId
+    session.phaseRevision = snapshot.revision
+    setAttribute(session.player, PLAYER_ATTRIBUTES.RaidPhase, snapshot.phase)
+    setAttribute(
+        session.player,
+        PLAYER_ATTRIBUTES.RaidPhaseStartedAtUnix,
+        snapshot.phaseStartedAtUnix
+    )
+    setAttribute(session.player, PLAYER_ATTRIBUTES.RaidPhaseEndsAtUnix, snapshot.phaseEndsAtUnix)
+    setAttribute(session.player, PLAYER_ATTRIBUTES.RaidId, snapshot.raidId)
+    setAttribute(session.player, PLAYER_ATTRIBUTES.RaidRevision, snapshot.revision)
+    setAttribute(session.player, PLAYER_ATTRIBUTES.RaidServerTimeUnix, snapshot.serverTimeUnix)
 end
 
 function SessionService.start(self: any, players: any): (boolean, string?)
@@ -131,6 +166,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     if userId == nil then
         return false, "InvalidPlayer"
     end
+    local joinedPhaseSnapshot = self._raidService:getSnapshot()
     if self._sessions[userId] ~= nil then
         return true, nil
     end
@@ -196,6 +232,9 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
         baseId = base.id,
         base = base,
         phase = phaseSnapshot.phase,
+        joinedDuringRaidId = if joinedPhaseSnapshot.phase == "RAID"
+            then joinedPhaseSnapshot.raidId
+            else nil,
         operational = false,
         token = token,
         connections = {},
@@ -205,7 +244,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     setAttribute(player, "OddlingsBaseId", base.id)
     setAttribute(player, "OddlingsSessionId", sessionId)
     setAttribute(player, "OddlingsOperational", false)
-    SessionService._applyPhase(session, phaseSnapshot.phase)
+    SessionService._applyPhase(session, phaseSnapshot)
 
     if self._onSessionReady ~= nil then
         local readyOk, readyResult = pcall(self._onSessionReady, player)
@@ -214,7 +253,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
             self._sessions[userId] = nil
             setAttribute(player, "OddlingsBaseId", nil)
             setAttribute(player, "OddlingsSessionId", nil)
-            setAttribute(player, "OddlingsRaidPhase", nil)
+            clearRaidAttributes(player)
             if self._onSessionEnded ~= nil then
                 pcall(self._onSessionEnded, player)
             end
@@ -290,7 +329,7 @@ function SessionService.onCharacterAdded(self: any, player: any, character: any)
         self._baseService:setOperational(player, true)
         setAttribute(player, "OddlingsOperational", true)
         if self._onOperationalChanged ~= nil then
-            self._onOperationalChanged(player, true, session.base)
+            self._onOperationalChanged(player, true, session.base, session.joinedDuringRaidId)
         end
     end)
     return true
@@ -310,7 +349,7 @@ function SessionService.onCharacterRemoving(self: any, player: any, _character: 
     self._baseService:setOperational(player, false)
     setAttribute(player, "OddlingsOperational", false)
     if self._onOperationalChanged ~= nil then
-        self._onOperationalChanged(player, false, session.base)
+        self._onOperationalChanged(player, false, session.base, session.joinedDuringRaidId)
     end
     return true
 end
@@ -320,7 +359,7 @@ function SessionService.onPhaseChanged(self: any, snapshot: any): boolean
         return false
     end
     for _, session in self._sessions do
-        SessionService._applyPhase(session, snapshot.phase)
+        SessionService._applyPhase(session, snapshot)
     end
     return true
 end
@@ -356,7 +395,7 @@ function SessionService.onPlayerRemoving(self: any, player: any): boolean
     setAttribute(player, "OddlingsBaseId", nil)
     setAttribute(player, "OddlingsSessionId", nil)
     setAttribute(player, "OddlingsOperational", false)
-    setAttribute(player, "OddlingsRaidPhase", nil)
+    clearRaidAttributes(player)
     return true
 end
 
@@ -371,6 +410,11 @@ function SessionService.getSession(self: any, player: any): any?
         sessionId = session.sessionId,
         baseId = session.baseId,
         phase = session.phase,
+        phaseStartedAtUnix = session.phaseStartedAtUnix,
+        phaseEndsAtUnix = session.phaseEndsAtUnix,
+        raidId = session.raidId,
+        phaseRevision = session.phaseRevision,
+        joinedDuringRaidId = session.joinedDuringRaidId,
         operational = session.operational,
     }
 end

@@ -1,5 +1,7 @@
 # First session, retention, and mobile UX
 
+M5 currently presents the shared phase and countdown plus the joining player's temporary Raid grace. The full first-session HUD, goal card, touch-first interaction, onboarding, and accessibility acceptance remain M8 work; the schedule below is the locked target experience.
+
 ## First 10 minutes
 
 The timestamps below describe a new player entering a fresh server. A player joining an existing server inherits its current shared raid phase; they do not get a private cycle.

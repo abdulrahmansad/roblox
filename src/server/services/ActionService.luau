@@ -306,7 +306,8 @@ function ActionService._dispatch(
     request: any,
     session: any
 ): (boolean, any?, string?)
-    local phase = self._raidService:getSnapshot().phase
+    local raidSnapshot = self._raidService:getSnapshot(session.userId)
+    local phase = raidSnapshot.phase
     if request.action ~= "GetSnapshot" and ECONOMY_PHASES[phase] ~= true then
         return false, nil, "WrongPhase"
     end
@@ -319,6 +320,15 @@ function ActionService._dispatch(
         return true,
             {
                 phase = phase,
+                raid = {
+                    phase = raidSnapshot.phase,
+                    phaseStartedAtUnix = raidSnapshot.phaseStartedAtUnix,
+                    phaseEndsAtUnix = raidSnapshot.phaseEndsAtUnix,
+                    raidId = raidSnapshot.raidId,
+                    revision = raidSnapshot.revision,
+                    serverTimeUnix = raidSnapshot.serverTimeUnix,
+                },
+                arrivalGrace = raidSnapshot.arrivalGrace,
                 scrap = profile.scrap,
                 creatures = profile.creatures,
                 slotCapacity = profile.slotCapacity,

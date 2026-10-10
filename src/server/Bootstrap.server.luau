@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 
@@ -22,7 +23,12 @@ local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
 
 assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match server capacity")
-local raidService = RaidService.new()
+local raidService = RaidService.new({
+    clock = os.time,
+    generateRaidId = function()
+        return HttpService:GenerateGUID(false)
+    end,
+})
 local baseService = BaseService.new({
     baseCount = Constants.BASE_COUNT,
     world = Workspace,
@@ -141,6 +147,21 @@ local sessionService = SessionService.new({
             actionService:clearUser(player.UserId)
         end
     end,
+    onOperationalChanged = function(player, isOperational, _base, joinedDuringRaidId)
+        local grace =
+            raidService:onOperationalChanged(player.UserId, isOperational, joinedDuringRaidId)
+        if grace ~= nil then
+            player:SetAttribute(Protocol.PlayerAttributeNames.ArrivalGraceRaidId, grace.raidId)
+            player:SetAttribute(
+                Protocol.PlayerAttributeNames.ArrivalGraceStartedAtUnix,
+                grace.startedAtUnix
+            )
+            player:SetAttribute(
+                Protocol.PlayerAttributeNames.ArrivalGraceEndsAtUnix,
+                grace.expiresAtUnix
+            )
+        end
+    end,
     generateSessionId = function()
         return HttpService:GenerateGUID(false)
     end,
@@ -154,8 +175,21 @@ local sessionService = SessionService.new({
     end,
 })
 raidService.Changed:Connect(function(snapshot)
-    sessionService:onPhaseChanged(snapshot)
     mutationService:onPhaseChanged(snapshot)
+    pcall(function()
+        domainEvent:FireAllClients({
+            event = Protocol.DomainEventNames.RaidPhaseChanged,
+            revision = snapshot.revision,
+            serverTimeUnix = snapshot.serverTimeUnix,
+            data = {
+                phase = snapshot.phase,
+                phaseStartedAtUnix = snapshot.phaseStartedAtUnix,
+                phaseEndsAtUnix = snapshot.phaseEndsAtUnix,
+                raidId = snapshot.raidId,
+                revision = snapshot.revision,
+            },
+        })
+    end)
 end)
 actionService = ActionService.new({
     sessionService = sessionService,
@@ -172,9 +206,11 @@ actionService = ActionService.new({
     mutationStationPart = mutationStationPart,
 })
 assert(actionService:start(), "ActionService failed to start")
+assert(raidService:start(RunService.Heartbeat), "RaidService failed to start")
 assert(sessionService:start(Players), "SessionService failed to start")
 game:BindToClose(function()
     actionService:stop()
+    raidService:stop()
     for _, player in Players:GetPlayers() do
         economyService:stopPlayer(player)
     end

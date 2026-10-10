@@ -21,4 +21,8 @@ Current manual smoke:
 
 Roblox currently also documents `StudioTestService` for plugin-driven multiplayer test sessions, adding players mid-test, disconnecting clients, and ending a test from the server. Add an automated Studio plugin harness when gameplay scenarios exist; there is no gameplay to exercise yet.
 
-Future scenarios: two-player interaction, phase transitions, ownership and proximity checks, duplicate/replayed requests, disconnect during interaction, race conditions, dropped items, join during an event, and 6–8-player mobile performance.
+## M5 Raid clock and arrival grace
+
+After starting a two-client session, confirm both clients show the same phase and countdown. Join a second client during RAID and confirm the shared timer does not reset; its 15-second arrival-grace label begins only after its character and base are ready, then disappears at expiry or when RAID ends. Reset the joining client's character and confirm the grace deadline does not move. Verify players joining in PEACE/WARNING receive no grace. Repeat with a late RAID join whose grace would outlast the RAID and confirm the next phase is shown at the shared boundary. The portable suite covers exact second boundaries; use Studio only for replicated attributes, UI timing, and multiplayer lifecycle behavior.
+
+Future scenarios: two-player interaction, ownership and proximity checks, duplicate/replayed requests, disconnect during interaction, race conditions, dropped items, join during an event, and 6–8-client mobile performance.

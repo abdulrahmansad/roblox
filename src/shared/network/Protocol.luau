@@ -11,6 +11,33 @@ export type DevPingResponse = {
     reason: string?,
 }
 
+export type RaidPhase = "PEACE" | "WARNING" | "RAID" | "RESOLUTION" | "COOLDOWN"
+
+export type ArrivalGraceSnapshot = {
+    raidId: string,
+    startedAtUnix: number,
+    expiresAtUnix: number,
+    active: boolean,
+}
+
+export type RaidSnapshot = {
+    phase: RaidPhase,
+    phaseStartedAtUnix: number,
+    phaseEndsAtUnix: number,
+    raidId: string,
+    revision: number,
+    serverTimeUnix: number,
+    arrivalGrace: ArrivalGraceSnapshot?,
+}
+
+export type RaidPhaseChangedData = {
+    phase: RaidPhase,
+    phaseStartedAtUnix: number,
+    phaseEndsAtUnix: number,
+    raidId: string,
+    revision: number,
+}
+
 local Protocol = {}
 local MUTATION_THEMES = { Ember = true, Prism = true, Moss = true }
 local MUTATION_CHOICES = { KeepCurrent = true, Replace = true, Decline = true }
@@ -20,6 +47,22 @@ Protocol.RemoteNames = table.freeze({
     ActionRequest = "ActionRequest",
     ActionResult = "ActionResult",
     DomainEvent = "DomainEvent",
+})
+
+Protocol.DomainEventNames = table.freeze({
+    RaidPhaseChanged = "RaidPhaseChanged",
+})
+
+Protocol.PlayerAttributeNames = table.freeze({
+    RaidPhase = "OddlingsRaidPhase",
+    RaidPhaseStartedAtUnix = "OddlingsRaidPhaseStartedAtUnix",
+    RaidPhaseEndsAtUnix = "OddlingsRaidPhaseEndsAtUnix",
+    RaidId = "OddlingsRaidId",
+    RaidRevision = "OddlingsRaidRevision",
+    RaidServerTimeUnix = "OddlingsRaidServerTimeUnix",
+    ArrivalGraceRaidId = "OddlingsArrivalGraceRaidId",
+    ArrivalGraceStartedAtUnix = "OddlingsArrivalGraceStartedAtUnix",
+    ArrivalGraceEndsAtUnix = "OddlingsArrivalGraceEndsAtUnix",
 })
 
 local function hasExactKeys(value: any, allowedKeys: { [string]: boolean }): boolean

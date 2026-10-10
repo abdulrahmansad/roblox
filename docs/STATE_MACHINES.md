@@ -2,6 +2,8 @@
 
 All states, transition timestamps, ownership, and outcomes below are server-owned. Clients may request transitions and render the resulting state; client animation, clocks, and claims do not decide outcomes.
 
+M5 implements the shared Raid phase clock and runtime arrival-grace lifecycle. The durable Welcome participation transitions and all theft lifecycle transitions remain M6 implementation scope; their presence here is a locked contract, not a claim that those systems are implemented.
+
 ## Shared Raid phase
 
 ```text

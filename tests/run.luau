@@ -12,6 +12,7 @@ local CapsuleService = require("../src/server/services/CapsuleService")
 local MutationService = require("../src/server/services/MutationService")
 local ActionService = require("../src/server/services/ActionService")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
+local RaidConfig = require("../src/shared/config/RaidConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
 local MutationDefinitions = require("../src/shared/definitions/MutationDefinitions")
 
@@ -185,6 +186,14 @@ test("shared protocol accepts a well-formed request", function()
         Protocol.isValidDevPingRequest({ requestId = "test-1" }),
         "valid ping should pass protocol validation"
     )
+    assert(
+        Protocol.DomainEventNames.RaidPhaseChanged == "RaidPhaseChanged",
+        "Raid phase events must use the centralized network contract"
+    )
+    assert(
+        Protocol.PlayerAttributeNames.RaidPhaseEndsAtUnix == "OddlingsRaidPhaseEndsAtUnix",
+        "replicated Raid state names must use the centralized contract"
+    )
 end)
 
 test("shared protocol rejects malformed and unexpected fields", function()
@@ -224,6 +233,12 @@ test("central action protocol rejects unknown fields and client authority values
         payload = request.payload,
         scrap = 1_000_000,
     }), "action envelope must reject extra authority fields")
+    assert(not Protocol.isValidActionRequest({
+        sessionId = request.sessionId,
+        requestId = "phase-request",
+        action = "SetRaidPhase",
+        payload = { phase = "RAID" },
+    }), "clients cannot request a Raid phase transition")
 end)
 
 test("server service initializes and accepts a valid request", function()
@@ -400,35 +415,353 @@ test("base collections map stable creatures to bounded stands and reset on relea
     )
 end)
 
-test("Raid phase skeleton publishes only valid sequential transitions", function()
+test("Raid config matches the exact locked eight-minute cycle", function()
+    local durations = RaidConfig.PHASE_DURATIONS_SECONDS
+    expect(table.concat(RaidConfig.PHASE_ORDER, ",") == "PEACE,WARNING,RAID,RESOLUTION,COOLDOWN")
+    expect(durations.PEACE == 300 and durations.WARNING == 30)
+    expect(durations.RAID == 90 and durations.RESOLUTION == 30 and durations.COOLDOWN == 30)
+    expect(
+        durations.PEACE
+                + durations.WARNING
+                + durations.RAID
+                + durations.RESOLUTION
+                + durations.COOLDOWN
+            == 480,
+        "the shared Raid cycle must total eight minutes"
+    )
+    expect(RaidConfig.ARRIVAL_GRACE_SECONDS == 15)
+end)
+
+test("Raid clock advances at exact boundaries without accumulating drift", function()
+    local now = { value = 100 }
     local service = RaidService.new({
         clock = function()
-            return 100
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "test-raid-" .. tostring(sequence)
         end,
     })
-    local changed = nil
+    local changed = {}
     service.Changed:Connect(function(snapshot)
-        changed = snapshot
+        table.insert(changed, snapshot)
     end)
 
-    local skipped = service:transitionTo("RAID", 101, 191)
-    assert(not skipped, "phase skeleton must reject skipped phases")
-    local invalidTime = service:transitionTo("WARNING", 99, 129)
-    assert(not invalidTime, "phase start time cannot move backward")
-    local notFinite = service:transitionTo("WARNING", math.huge, math.huge)
-    assert(not notFinite, "phase timestamps must be finite")
-    local advanced = service:transitionTo("WARNING", 101, 131)
-    assert(advanced, "PEACE may transition to WARNING")
-    assert(changed.phase == "WARNING", "phase update should be published")
-    assert(changed.phaseStartedAtUnix == 101, "phase start time should be server-owned")
+    local first = service:getSnapshot()
+    expect(first.phase == "PEACE" and first.phaseStartedAtUnix == 100)
+    expect(first.phaseEndsAtUnix == 400 and first.raidId == "test-raid-1")
+    local boundaries = {
+        { phase = "WARNING", start = 400, finish = 430 },
+        { phase = "RAID", start = 430, finish = 520 },
+        { phase = "RESOLUTION", start = 520, finish = 550 },
+        { phase = "COOLDOWN", start = 550, finish = 580 },
+        { phase = "PEACE", start = 580, finish = 880 },
+    }
+    for _, expected in boundaries do
+        now.value = expected.start - 1
+        local earlyOk, earlyTransitions = service:step()
+        expect(earlyOk and earlyTransitions == 0, "a phase must not advance before its deadline")
+        now.value = expected.start
+        local advanced, count = service:step()
+        expect(advanced and count == 1, "the exact boundary must advance one phase")
+        local snapshot = service:getSnapshot()
+        expect(snapshot.phase == expected.phase)
+        expect(snapshot.phaseStartedAtUnix == expected.start)
+        expect(snapshot.phaseEndsAtUnix == expected.finish)
+        expect(changed[#changed].phase == expected.phase, "each boundary must publish its phase")
+    end
+    expect(changed[2].raidId == "test-raid-2", "entering RAID creates a distinct server Raid ID")
+    local backwardOk, _, backwardError = service:step(579)
+    expect(not backwardOk and backwardError == "InvalidTimestamp")
+end)
+
+test("Raid clock catches up through delayed ticks using scheduled boundaries", function()
+    local now = { value = 1_000 }
+    local service = RaidService.new({
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "catchup-" .. tostring(sequence)
+        end,
+    })
+    local eventCount = 0
+    service.Changed:Connect(function()
+        eventCount += 1
+    end)
+
+    now.value = 1_000 + 3 * 480
+    local stepped, transitions = service:step()
+    local snapshot = service:getSnapshot()
+    expect(stepped and transitions == 15 and eventCount == 15)
+    expect(snapshot.phase == "PEACE" and snapshot.phaseStartedAtUnix == now.value)
+    expect(snapshot.phaseEndsAtUnix == now.value + 300)
+end)
+
+test("Raid clock binds one server heartbeat and stops cleanly", function()
+    local now = { value = 1_500 }
+    local service = RaidService.new({
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "heartbeat-" .. tostring(sequence)
+        end,
+    })
+    local heartbeat = newSignal()
+    local eventCount = 0
+    service.Changed:Connect(function()
+        eventCount += 1
+    end)
+    local started = service:start(heartbeat)
+    expect(started)
+    local duplicateStart, duplicateError = service:start(heartbeat)
+    expect(not duplicateStart and duplicateError == "AlreadyStarted")
+
+    now.value = 1_800
+    heartbeat:Fire()
+    expect(service:getSnapshot().phase == "WARNING")
+    now.value = 1_830
+    heartbeat:Fire()
+    expect(service:getSnapshot().phase == "RAID")
+    service:stop()
+
+    now.value = 1_920
+    heartbeat:Fire()
+    expect(eventCount == 2, "stopped RaidService must disconnect from server Heartbeat")
+    expect(service:getSnapshot().phase == "RESOLUTION")
+    local invalidStart, invalidError = service:start(nil)
+    expect(not invalidStart and invalidError == "InvalidHeartbeat")
+end)
+
+test("arrival grace starts at operational readiness and never refreshes", function()
+    local now = { value = 500 }
+    local service = RaidService.new({
+        initialPhase = "RAID",
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "grace-" .. tostring(sequence)
+        end,
+    })
+    local raidId = service:getSnapshot().raidId
+    local notJoinedDuringRaid = service:onOperationalChanged(700, true, nil)
+    expect(notJoinedDuringRaid == nil, "a pre-existing player does not receive arrival grace")
+
+    local grace = service:onOperationalChanged(701, true, raidId)
+    expect(grace ~= nil and grace.startedAtUnix == 500 and grace.expiresAtUnix == 515)
+    expect(service:isArrivalGraceActive(701), "active grace blocks the user's Raid interactions")
+
+    now.value = 510
+    service:onOperationalChanged(701, false, raidId)
+    local afterRespawn = service:onOperationalChanged(701, true, raidId)
+    expect(afterRespawn.startedAtUnix == 500 and afterRespawn.expiresAtUnix == 515)
+    expect(service:isArrivalGraceActive(701), "respawn preserves, but does not restart, grace")
+
+    now.value = 515
+    expect(not service:isArrivalGraceActive(701), "grace expires at its exact timestamp")
+    local afterExpiry = service:onOperationalChanged(701, true, raidId)
+    expect(afterExpiry.startedAtUnix == 500 and afterExpiry.expiresAtUnix == 515)
+    expect(not afterExpiry.active, "a repeated readiness event cannot create new grace")
+
+    now.value = 580
+    local lateGrace = service:onOperationalChanged(702, true, raidId)
+    expect(lateGrace.expiresAtUnix == 595)
+    now.value = 590
+    expect(service:getSnapshot().phase == "RESOLUTION")
+    expect(not service:isArrivalGraceActive(702), "arrival grace never continues beyond RAID")
+end)
+
+test("session phase snapshots and arrival grace distinguish joins from resets", function()
+    for _, phase in RaidConfig.PHASE_ORDER do
+        local now = { value = 1_000 }
+        local raidService = RaidService.new({
+            initialPhase = phase,
+            clock = function()
+                return now.value
+            end,
+            generateRaidId = function(sequence)
+                return phase .. "-raid-" .. tostring(sequence)
+            end,
+        })
+        local baseService = BaseService.new({ baseCount = 1 })
+        local callbackGrace = nil
+        local sessionService = SessionService.new({
+            baseService = baseService,
+            raidService = raidService,
+            isPlayer = function(player)
+                return type(player) == "table" and type(player.UserId) == "number"
+            end,
+            schedule = function(callback)
+                callback()
+            end,
+            spawnCharacter = function()
+                return true
+            end,
+            onOperationalChanged = function(player, isOperational, _base, joinedDuringRaidId)
+                callbackGrace = raidService:onOperationalChanged(
+                    player.UserId,
+                    isOperational,
+                    joinedDuringRaidId
+                )
+                if callbackGrace ~= nil then
+                    player:SetAttribute("OddlingsArrivalGraceRaidId", callbackGrace.raidId)
+                    player:SetAttribute(
+                        "OddlingsArrivalGraceStartedAtUnix",
+                        callbackGrace.startedAtUnix
+                    )
+                    player:SetAttribute(
+                        "OddlingsArrivalGraceEndsAtUnix",
+                        callbackGrace.expiresAtUnix
+                    )
+                end
+            end,
+        })
+        local player = newPlayer(400 + #phase, {})
+        local added = sessionService:onPlayerAdded(player)
+        local session = sessionService:getSession(player)
+        expect(added and session.phase == phase)
+        expect(player.attributes.OddlingsRaidPhase == phase)
+        expect(
+            player.attributes.OddlingsRaidPhaseEndsAtUnix
+                == 1_000 + RaidConfig.PHASE_DURATIONS_SECONDS[phase]
+        )
+        if phase == "RAID" then
+            expect(session.joinedDuringRaidId == session.raidId)
+            expect(callbackGrace ~= nil and callbackGrace.active)
+            expect(player.attributes.OddlingsArrivalGraceEndsAtUnix == 1_015)
+            local originalEnd = callbackGrace.expiresAtUnix
+            now.value = 1_005
+            local oldCharacter = player.Character
+            player.CharacterRemoving:Fire(oldCharacter)
+            player.Character = {}
+            player.CharacterAdded:Fire(player.Character)
+            expect(callbackGrace.expiresAtUnix == originalEnd)
+            sessionService:onPlayerRemoving(player)
+            now.value = 1_008
+            local rejoined = sessionService:onPlayerAdded(player)
+            expect(rejoined)
+            expect(
+                callbackGrace.startedAtUnix == 1_000 and callbackGrace.expiresAtUnix == originalEnd,
+                "rejoining the same Raid must reuse the original grace window"
+            )
+        else
+            expect(session.joinedDuringRaidId == nil)
+            expect(callbackGrace == nil, "non-RAID joins never receive Raid arrival grace")
+        end
+        sessionService:stop()
+    end
+end)
+
+test("GetSnapshot returns authoritative Raid timing and private arrival grace", function()
+    local userId = 441
+    local now = { value = 2_000 }
+    local dataService = makeLoadedDataService(userId, "raid-snapshot-")
+    local raidService = RaidService.new({
+        initialPhase = "RAID",
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "snapshot-raid-" .. tostring(sequence)
+        end,
+    })
+    local raidSnapshot = raidService:getSnapshot()
+    raidService:onOperationalChanged(userId, true, raidSnapshot.raidId)
+    local player = newPlayer(userId)
+    local actionService = ActionService.new({
+        sessionService = {
+            getSession = function()
+                return { userId = userId, sessionId = "raid-snapshot-session" }
+            end,
+        },
+        raidService = raidService,
+        playerDataService = dataService,
+        economyService = {},
+        capsuleService = {},
+        mutationService = {
+            getOddsSnapshot = function()
+                return { normal = true }
+            end,
+            getPending = function()
+                return nil
+            end,
+        },
+        baseService = BaseService.new({ baseCount = 1 }),
+        requestEvent = { OnServerEvent = newSignal() },
+        resultEvent = { FireClient = function() end },
+        domainEvent = { FireClient = function() end },
+        clock = function()
+            return now.value
+        end,
+        unixClock = function()
+            return now.value
+        end,
+    })
+    local response = actionService:handle(player, {
+        sessionId = "raid-snapshot-session",
+        requestId = "raid-snapshot-request",
+        action = "GetSnapshot",
+        payload = {},
+    })
+    expect(response.ok and response.data.phase == "RAID")
+    expect(response.data.raid.raidId == raidSnapshot.raidId)
+    expect(response.data.raid.phaseStartedAtUnix == 2_000)
+    expect(response.data.raid.phaseEndsAtUnix == 2_090)
+    expect(response.data.raid.serverTimeUnix == 2_000)
+    expect(response.data.arrivalGrace.active)
+    expect(response.data.arrivalGrace.expiresAtUnix == 2_015)
+end)
+
+test("a pre-existing player does not gain Raid grace from a reset after Raid starts", function()
+    local now = { value = 1_000 }
+    local raidService = RaidService.new({
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "existing-player-raid-" .. tostring(sequence)
+        end,
+    })
+    local player = newPlayer(442, {})
+    local sessionService = SessionService.new({
+        baseService = BaseService.new({ baseCount = 1 }),
+        raidService = raidService,
+        isPlayer = function(candidate)
+            return candidate == player
+        end,
+        schedule = function(callback)
+            callback()
+        end,
+        spawnCharacter = function()
+            return true
+        end,
+        onOperationalChanged = function(candidate, isOperational, _base, joinedDuringRaidId)
+            raidService:onOperationalChanged(candidate.UserId, isOperational, joinedDuringRaidId)
+        end,
+    })
+    local added = sessionService:onPlayerAdded(player)
+    expect(added and sessionService:getSession(player).joinedDuringRaidId == nil)
+    expect(not raidService:isArrivalGraceActive(player.UserId))
+
+    now.value = 1_330
+    local stepped = raidService:step()
+    expect(stepped and raidService:getSnapshot().phase == "RAID")
+    local oldCharacter = player.Character
+    player.CharacterRemoving:Fire(oldCharacter)
+    player.Character = {}
+    player.CharacterAdded:Fire(player.Character)
+    expect(not raidService:isArrivalGraceActive(player.UserId))
 end)
 
 test("session inherits phase, spawns at its base, and cleans up on leave", function()
     local baseService = BaseService.new({ baseCount = 8 })
+    local now = { value = 500 }
     local raidService = RaidService.new({
         initialPhase = "WARNING",
         clock = function()
-            return 500
+            return now.value
         end,
     })
     local sessionService = SessionService.new({
@@ -478,8 +811,9 @@ test("session inherits phase, spawns at its base, and cleans up on leave", funct
         "respawn must not reassign the base"
     )
 
-    local transitioned = raidService:transitionTo("RAID", 510, 600)
-    assert(transitioned, "phase skeleton should advance to RAID")
+    now.value = 530
+    local transitioned = raidService:step()
+    assert(transitioned, "Raid clock should advance at the configured boundary")
     assert(
         player.attributes.OddlingsRaidPhase == "RAID",
         "existing session should receive phase updates"
@@ -544,6 +878,38 @@ test("failed profile readiness rejects the player before base assignment", funct
     )
     assert(baseService:getAvailableCount() == 8, "failed profile must not reserve a base")
     assert(sessionService:getSession(player) == nil, "failed profile must not expose a session")
+end)
+
+test("failed session initialization clears all replicated Raid state", function()
+    local attributes = Protocol.PlayerAttributeNames
+    local sessionService = SessionService.new({
+        baseService = BaseService.new({ baseCount = 1 }),
+        raidService = RaidService.new({ initialPhase = "RAID" }),
+        isPlayer = function(player)
+            return type(player) == "table" and type(player.UserId) == "number"
+        end,
+        onSessionReady = function()
+            return false
+        end,
+    })
+    local player = newPlayer(351, {})
+    local added = sessionService:onPlayerAdded(player)
+    expect(not added, "session startup failure rejects the player")
+    for _, name in
+        {
+            attributes.RaidPhase,
+            attributes.RaidPhaseStartedAtUnix,
+            attributes.RaidPhaseEndsAtUnix,
+            attributes.RaidId,
+            attributes.RaidRevision,
+            attributes.RaidServerTimeUnix,
+            attributes.ArrivalGraceRaidId,
+            attributes.ArrivalGraceStartedAtUnix,
+            attributes.ArrivalGraceEndsAtUnix,
+        }
+    do
+        expect(player.attributes[name] == nil, "failed sessions must clear stale Raid attributes")
+    end
 end)
 
 test("session waits for profile readiness and saves after stopping online systems", function()
