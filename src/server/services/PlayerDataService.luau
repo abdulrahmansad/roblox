@@ -356,10 +356,6 @@ local function reconcileTransferRecord(
     if shouldNotOwn then
         if foundIndex ~= nil then
             table.remove(profile.creatures, foundIndex)
-            if record.state == "PREPARED" then
-                local catalystId = MutationConfig.CATALYSTS_BY_THEME[record.catalystThemeId]
-                profile.catalysts[catalystId] = math.max(0, profile.catalysts[catalystId] - 1)
-            end
             return true, nil
         end
         return true, nil

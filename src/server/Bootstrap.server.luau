@@ -18,6 +18,7 @@ local CreatureService = require(ServerScriptService.Server.services.CreatureServ
 local CapsuleService = require(ServerScriptService.Server.services.CapsuleService)
 local MutationService = require(ServerScriptService.Server.services.MutationService)
 local TheftService = require(ServerScriptService.Server.services.TheftService)
+local TagService = require(ServerScriptService.Server.services.TagService)
 local ActionService = require(ServerScriptService.Server.services.ActionService)
 local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore)
 local TransferJournalStore = require(ServerScriptService.Server.persistence.TransferJournalStore)
@@ -27,6 +28,7 @@ local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
 assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match server capacity")
 local playerDataService: any = nil
 local theftService: any = nil
+local tagService: any = nil
 local raidService = RaidService.new({
     clock = os.time,
     generateRaidId = function()
@@ -158,11 +160,38 @@ theftService = TheftService.new({
     generateAttemptId = function()
         return HttpService:GenerateGUID(false)
     end,
+    isStaggered = function(userId, raidId)
+        return tagService ~= nil and tagService:isStaggered(userId, raidId)
+    end,
     clock = os.clock,
     unixClock = os.time,
     schedule = function(callback)
         task.spawn(callback)
     end,
+    emitToUser = function(userId, event, data)
+        local player = Players:GetPlayerByUserId(userId)
+        if player ~= nil then
+            pcall(function()
+                domainEvent:FireClient(player, {
+                    event = event,
+                    revision = playerDataService:getRevision(userId) or 0,
+                    serverTimeUnix = os.time(),
+                    data = data,
+                })
+            end)
+        end
+    end,
+})
+tagService = TagService.new({
+    raidService = raidService,
+    theftService = theftService,
+    getPlayer = function(userId)
+        return Players:GetPlayerByUserId(userId)
+    end,
+    isOperational = function(player)
+        return baseService:isOperational(player)
+    end,
+    clock = os.clock,
     emitToUser = function(userId, event, data)
         local player = Players:GetPlayerByUserId(userId)
         if player ~= nil then
@@ -215,6 +244,7 @@ local sessionService = SessionService.new({
     end,
     onSessionEnded = function(player)
         theftService:onPlayerRemoving(player.UserId)
+        tagService:onPlayerRemoving(player.UserId)
         economyService:stopPlayer(player)
         mutationService:clearUser(player.UserId)
         creatureService:cleanupUser(player.UserId)
@@ -275,6 +305,7 @@ actionService = ActionService.new({
     capsuleService = capsuleService,
     mutationService = mutationService,
     theftService = theftService,
+    tagService = tagService,
     baseService = baseService,
     requestEvent = actionRequest,
     resultEvent = actionResult,
@@ -283,11 +314,13 @@ actionService = ActionService.new({
     mutationStationPart = mutationStationPart,
 })
 assert(actionService:start(), "ActionService failed to start")
+assert(tagService:start(RunService.Heartbeat), "TagService failed to start")
 assert(theftService:start(RunService.Heartbeat), "TheftService failed to start")
 assert(raidService:start(RunService.Heartbeat), "RaidService failed to start")
 assert(sessionService:start(Players), "SessionService failed to start")
 game:BindToClose(function()
     actionService:stop()
+    tagService:stop()
     theftService:shutdown(20)
     raidService:stop()
     for _, player in Players:GetPlayers() do

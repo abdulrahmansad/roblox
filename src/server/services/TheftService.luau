@@ -101,6 +101,7 @@ function TheftService.new(options: any)
         _getHumanoid = options.getHumanoid or defaultGetHumanoid,
         _isOperational = options.isOperational,
         _generateAttemptId = options.generateAttemptId,
+        _isStaggered = options.isStaggered,
         _clock = options.clock or os.clock,
         _unixClock = options.unixClock or os.time,
         _schedule = options.schedule or function(callback)
@@ -113,9 +114,6 @@ function TheftService.new(options: any)
         _activeCreatureLocks = {},
         _raidStateByThief = {},
         _raidOwnerLosses = {},
-        _tagCooldowns = {},
-        _tagImmunity = {},
-        _staggers = {},
         _connections = {},
         _raidId = nil,
         _inFlightCommits = 0,
@@ -389,8 +387,7 @@ function TheftService.beginTheft(
     if not self:_isOperationalForUser(thiefUserId) then
         return nil, "Unavailable"
     end
-    local thiefStagger = self._staggers[thiefUserId]
-    if type(thiefStagger) == "table" and thiefStagger.endsAt > self._clock() then
+    if self._isStaggered ~= nil and self._isStaggered(thiefUserId, raid.raidId) == true then
         return nil, "Locked"
     end
     if self:_isGraceProtected(thiefUserId) then
@@ -780,6 +777,15 @@ function TheftService.completeBank(
                 tostring(prepareError)
             )
         )
+        local aborted, abortError = self._transferJournalStore:abort(record.transferId)
+        if not aborted then
+            warn(
+                string.format(
+                    "[Theft] Prepared intent cleanup remains pending: %s",
+                    tostring(abortError)
+                )
+            )
+        end
         self._playerDataService:abortTransferLock(
             record.transferId,
             record.fromUserId,
@@ -789,13 +795,7 @@ function TheftService.completeBank(
         self._inFlightCommits -= 1
         return nil, "ServiceUnavailable"
     end
-    local committed, commitError = false, nil
-    for _ = 1, 3 do
-        committed, commitError = self._transferJournalStore:commit(record.transferId)
-        if committed then
-            break
-        end
-    end
+    local committed, commitError = self._transferJournalStore:commit(record.transferId)
     if not committed then
         local aborted, abortError = self._transferJournalStore:abort(record.transferId)
         if aborted then
@@ -827,99 +827,55 @@ function TheftService.completeBank(
     return attempt.bankResult, nil
 end
 
-function TheftService.tag(self: any, defenderUserId: number, targetUserId: number): (any?, string?)
-    local raid, phaseError = self:_checkPhase()
-    if raid == nil then
-        return nil, phaseError
-    end
-    if defenderUserId == targetUserId then
-        return { success = false, result = "Miss" }, nil
-    end
-    local now = self._clock()
-    local cooldown = self._tagCooldowns[defenderUserId]
-    if cooldown ~= nil and cooldown.raidId == raid.raidId and now < cooldown.endsAt then
-        return nil, "RateLimited"
-    end
-    local defenderStagger = self._staggers[defenderUserId]
-    if type(defenderStagger) == "table" and defenderStagger.endsAt > now then
-        return nil, "Locked"
-    end
+function TheftService.getTagTargetInfo(self: any, targetUserId: number): any?
     local attempt = getAttemptForUser(self, targetUserId)
     if
         attempt == nil
-        or (attempt.state ~= "CHANNELING" and attempt.state ~= "CARRIED" and attempt.state ~= "BANKING")
-        or not self:_isOperationalForUser(defenderUserId)
-        or not self:_isOperationalForUser(targetUserId)
+        or (
+            attempt.state ~= "CHANNELING"
+            and attempt.state ~= "CARRIED"
+            and attempt.state ~= "BANKING"
+        )
     then
-        return { success = false, result = "Miss" }, nil
+        return nil
     end
-    local defenderPosition = self:_getPosition(defenderUserId)
-    local thiefPosition = self:_getPosition(targetUserId)
-    local separation = distance(defenderPosition, thiefPosition)
-    if separation == nil or separation > RaidConfig.TAG_RANGE_STUDS then
-        return { success = false, result = "Miss" }, nil
-    end
-    local immunityUntil = self._tagImmunity[targetUserId]
-    if
-        immunityUntil ~= nil
-        and immunityUntil.raidId == raid.raidId
-        and now < immunityUntil.endsAt
-    then
-        return { success = false, result = "Miss" }, nil
-    end
-    self._tagCooldowns[defenderUserId] = {
-        raidId = raid.raidId,
-        endsAt = now + RaidConfig.TAG_COOLDOWN_SECONDS,
-    }
-    self._tagImmunity[targetUserId] = {
-        raidId = raid.raidId,
-        endsAt = now + RaidConfig.TAG_IMMUNITY_SECONDS,
-    }
-    if attempt.state == "CHANNELING" then
-        self:_returnAttempt(attempt, "Tagged")
-    else
-        self:_setCarryMovement(attempt, false)
-        attempt.state = "DROPPED"
-        attempt.dropPosition = copyPosition(thiefPosition)
-        attempt.dropStartedAt = now
-        attempt.recoveryHold = nil
-        attempt.bankHold = nil
-        self._activeAttemptByThief[targetUserId] = nil
-        self:_emitState(attempt)
-    end
-    self:_applyStagger(targetUserId, now + RaidConfig.TAG_STAGGER_SECONDS)
-    local result =
-        { success = true, result = if attempt.state == "DROPPED" then "Dropped" else "Cancelled" }
-    self:_emit(
-        defenderUserId,
-        Protocol.DomainEventNames.TagResolved,
-        { targetUserId = targetUserId, result = result.result }
-    )
-    self:_emit(
-        targetUserId,
-        Protocol.DomainEventNames.TagResolved,
-        { targetUserId = targetUserId, result = result.result }
-    )
-    return result, nil
+    return { attemptId = attempt.id, state = attempt.state }
 end
 
-function TheftService._applyStagger(self: any, userId: number, endsAt: number)
-    local humanoid = self:_getHumanoidForUser(userId)
-    if humanoid == nil then
-        self._staggers[userId] = { endsAt = endsAt, movement = nil }
-        return
+function TheftService.resolveTag(
+    self: any,
+    targetUserId: number,
+    expectedAttemptId: string
+): (string?, string?)
+    local attempt = getAttemptForUser(self, targetUserId)
+    if
+        attempt == nil
+        or attempt.id ~= expectedAttemptId
+        or (
+            attempt.state ~= "CHANNELING"
+            and attempt.state ~= "CARRIED"
+            and attempt.state ~= "BANKING"
+        )
+    then
+        return nil, "Conflict"
     end
-    local movement = {
-        humanoid = humanoid,
-        walkSpeed = humanoid.WalkSpeed,
-        jumpPower = humanoid.JumpPower,
-        jumpHeight = humanoid.JumpHeight,
-        useJumpPower = humanoid.UseJumpPower,
-    }
-    self._staggers[userId] = { endsAt = endsAt, movement = movement }
-    humanoid.WalkSpeed = 0
-    humanoid.JumpPower = 0
-    humanoid.JumpHeight = 0
+    if attempt.state == "CHANNELING" then
+        self:_returnAttempt(attempt, "Tagged")
+        return "Cancelled", nil
+    end
+    local thiefPosition = copyPosition(self:_getPosition(targetUserId))
+    if thiefPosition == nil then
+        return nil, "Unavailable"
+    end
+    self:_setCarryMovement(attempt, false)
+    attempt.state = "DROPPED"
+    attempt.dropPosition = thiefPosition
+    attempt.dropStartedAt = self._clock()
+    attempt.recoveryHold = nil
+    attempt.bankHold = nil
+    self._activeAttemptByThief[targetUserId] = nil
+    self:_emitState(attempt)
+    return "Dropped", nil
 end
 
 function TheftService.beginRecovery(
@@ -1068,18 +1024,6 @@ function TheftService.step(self: any, now: number?): (boolean, string?)
             self._attempts[attemptId] = nil
         end
     end
-    for userId, stagger in self._staggers do
-        if type(stagger) == "table" and stagger.endsAt ~= nil and timestamp >= stagger.endsAt then
-            local movement = stagger.movement
-            if movement ~= nil and movement.humanoid == self:_getHumanoidForUser(userId) then
-                movement.humanoid.WalkSpeed = movement.walkSpeed
-                movement.humanoid.JumpPower = movement.jumpPower
-                movement.humanoid.JumpHeight = movement.jumpHeight
-                movement.humanoid.UseJumpPower = movement.useJumpPower
-            end
-            self._staggers[userId] = nil
-        end
-    end
     return true, nil
 end
 
@@ -1109,9 +1053,6 @@ function TheftService.onPlayerRemoving(self: any, userId: number)
             self:_returnAttempt(attempt, "PlayerLeft")
         end
     end
-    self._tagCooldowns[userId] = nil
-    self._tagImmunity[userId] = nil
-    self._staggers[userId] = nil
 end
 
 function TheftService.onOperationalChanged(self: any, userId: number, isOperational: boolean)

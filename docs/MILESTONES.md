@@ -89,7 +89,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 
 ## M7 — Persistence hardening
 
-- **Goal / included:** Complete V1 profile durability for every schema field; sequential migrations, session locks, validation, backup/quarantine, bounded retries, shutdown behavior, and transfer-recovery journal guarantees.
+- **Goal / included:** Complete V1 profile durability for every schema field; version checks, session locks, validation, backup/quarantine, bounded retries, shutdown behavior, and transfer-recovery journal guarantees. Add sequential migration functions only when a real earlier schema exists to migrate.
 - **Non-goals:** Offline income, cross-server trade, Mythic pity, unapproved profile fields.
 - **Dependencies:** M2–M6 domain mutations; `PlayerDataService` and `ProfileStore`.
 - **Player-visible result:** Progress, pity, Codex, tutorial, and first-Raid protection survive leaving/rejoining without duplicate creatures or rewards.
@@ -97,6 +97,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Acceptance:** The saved record matches DATA_MODEL.md exactly; no unknown-version overwrite; corrupt data is quarantined/recovered rather than reset; session conflicts block a second writer; interrupted transfers resolve to one owner; offline income remains zero.
 - **Docs:** `DATA_MODEL.md`, `SECURITY.md`, `ARCHITECTURE.md`, `TESTING.md`, `PROJECT_STATUS.md`.
 - **Commit boundary:** One persistence hardening commit; do not include unrelated UX/content.
+- **Current evidence:** Canonical verification passes formatting, Selene (0 errors/warnings), 81 Lune tests, and Rojo build. Portable coverage includes exact profile round-trip, session takeover/rejection, exhausted save retry, valid/invalid/missing and stale-revision backup, quarantine-before-restore, future-version fail-closed, strict bounded journal retry/schema/capacity, PREPARED rollback, COMMITTED replay, and shutdown with normal ownership, carried state, and an ambiguous bank. No earlier persisted schema exists in the locked data model, so no fabricated migration was added; a legacy schema fixture is required when a future schema bump introduces a real migration. Live DataStore and Studio checks remain pending.
 
 ## M8 — Onboarding and mobile UI
 

@@ -13,6 +13,7 @@ local CapsuleService = require("../src/server/services/CapsuleService")
 local MutationService = require("../src/server/services/MutationService")
 local ActionService = require("../src/server/services/ActionService")
 local TheftService = require("../src/server/services/TheftService")
+local TagService = require("../src/server/services/TagService")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
 local RaidConfig = require("../src/shared/config/RaidConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
@@ -98,6 +99,10 @@ local function makeFakeDataStore()
         return cloneTable(updated.value), keyInfoFor(updated)
     end
     function store:GetAsync(key)
+        if self.getFailuresRemaining ~= nil and self.getFailuresRemaining > 0 then
+            self.getFailuresRemaining -= 1
+            error("temporary DataStore read failure")
+        end
         local existing = self.records[key]
         return if existing ~= nil then cloneTable(existing.value) else nil
     end
@@ -206,6 +211,9 @@ local function makeTheftContext(options: any?)
             return "theft-starter-" .. tostring(nextCreatureId)
         end,
         autoSaveEnabled = false,
+        schedule = function(callback)
+            callback()
+        end,
         wait = function() end,
     })
     local baseService = BaseService.new({ baseCount = #userIds })
@@ -294,12 +302,16 @@ local function makeTheftContext(options: any?)
             return "theft-raid-" .. tostring(sequence)
         end,
     })
+    local tagService = nil
     if options.graceUserId ~= nil then
         local raidId = raidService:getSnapshot().raidId
         raidService:onOperationalChanged(options.graceUserId, true, raidId)
     end
     local journalDataStore = makeFakeDataStore()
-    local journalStore = TransferJournalStore.new({ store = journalDataStore })
+    local journalStore = TransferJournalStore.new({
+        store = journalDataStore,
+        wait = function() end,
+    })
     local creatureService = CreatureService.new({
         playerDataService = ownerData,
         baseService = baseService,
@@ -329,6 +341,9 @@ local function makeTheftContext(options: any?)
             attemptSequence += 1
             return "theft-attempt-" .. tostring(attemptSequence)
         end,
+        isStaggered = function(userId, raidId)
+            return tagService ~= nil and tagService:isStaggered(userId, raidId)
+        end,
         clock = function()
             return monotonicNow.value
         end,
@@ -340,6 +355,26 @@ local function makeTheftContext(options: any?)
                 callback()
             end
         end,
+    })
+    tagService = TagService.new({
+        raidService = raidService,
+        theftService = theftService,
+        getPlayer = function(userId)
+            return players[userId]
+        end,
+        getPlayerPosition = function(player)
+            return positions[player.UserId]
+        end,
+        getHumanoid = function(player)
+            return humanoids[player.UserId]
+        end,
+        isOperational = function(player)
+            return baseService:isOperational(player)
+        end,
+        clock = function()
+            return monotonicNow.value
+        end,
+        emitToUser = options.emitToUser,
     })
     local targetPosition = baseService:getCreatureDisplayPosition(ownerUserId, targetId)
     positions[ownerUserId] = baseService:getHomePadPosition(ownerUserId)
@@ -358,6 +393,7 @@ local function makeTheftContext(options: any?)
         creatureService = creatureService,
         raidService = raidService,
         theftService = theftService,
+        tagService = tagService,
         journalStore = journalStore,
         journalDataStore = journalDataStore,
         profileDataStore = profileDataStore,
@@ -1300,6 +1336,15 @@ test("profile store atomically locks, saves, releases, and reloads one profile",
     local released, releaseError = firstStore:save(501, loaded, true)
     assert(released and releaseError == nil, "final save should release the lock")
     assert(
+        dataStore.records.Player_501.metadata.oddSaveRevision == 2,
+        "profile saves should advance their stored revision"
+    )
+    assert(
+        dataStore.records.Backup_Player_501.value.saveRevision == 2
+            and dataStore.records.Backup_Player_501.value.profile.scrap == 175,
+        "every confirmed save should leave a revisioned, validated backup"
+    )
+    assert(
         dataStore.records.Player_501.metadata.oddSessionToken == nil,
         "released profile should not retain its token"
     )
@@ -1330,6 +1375,148 @@ test("profile store preserves corrupt and future-version records", function()
         dataStore.records.Player_502.metadata.oddSessionToken == nil,
         "corrupt record must not acquire a lock"
     )
+end)
+
+test("profile store quarantines corrupt data and restores a verified backup", function()
+    local dataStore = makeFakeDataStore()
+    local now = { value = 1_000 }
+    local tokens = { value = 0 }
+    local profileStore = makeProfileStore(dataStore, now, tokens)
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "backup-starter"
+    end)
+    local profile = profileStore:load(507, defaults)
+    expect(profile ~= nil)
+    profile.scrap = 777
+    expect(profileStore:save(507, profile, true))
+    dataStore.records.Player_507.value = { schemaVersion = 1, scrap = -1 }
+
+    local recovered, recoveryError = profileStore:load(507, defaults)
+    expect(recovered ~= nil and recoveryError == nil)
+    expect(recovered.scrap == 777 and recovered.starterCreatureId == "backup-starter")
+    expect(dataStore.records.Player_507.value.scrap == 777)
+    expect(dataStore.records.Player_507.metadata.oddSessionToken ~= nil)
+    local quarantine = nil
+    for key, record in dataStore.records do
+        if string.sub(key, 1, #"Quarantine_507_") == "Quarantine_507_" then
+            quarantine = record.value
+            break
+        end
+    end
+    expect(quarantine ~= nil and quarantine.value.scrap == -1)
+    expect(profileStore:save(507, recovered, true))
+end)
+
+test("profile store refuses to restore a backup older than the primary save revision", function()
+    local dataStore = makeFakeDataStore()
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "stale-backup-starter"
+    end)
+    local profileStore = makeProfileStore(dataStore)
+    local profile = profileStore:load(512, defaults)
+    expect(profile ~= nil)
+    expect(profileStore:save(512, profile, true))
+    dataStore.records.Player_512.value = { schemaVersion = 1, scrap = -1 }
+    dataStore.records.Player_512.metadata.oddSaveRevision += 1
+
+    local recovered, reason = profileStore:load(512, defaults)
+    expect(recovered == nil and string.find(reason, "StaleProfileBackup") ~= nil)
+    expect(dataStore.records.Player_512.value.scrap == -1)
+    expect(dataStore.records.Player_512.metadata.oddSessionToken == nil)
+end)
+
+test("profile store quarantines corruption but never trusts an invalid backup", function()
+    local dataStore = makeFakeDataStore()
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "bad-backup-starter"
+    end)
+    dataStore.records.Player_508 = {
+        value = { schemaVersion = 1, scrap = -5 },
+        userIds = { 508 },
+        metadata = {},
+    }
+    dataStore.records.Backup_Player_508 = {
+        value = {
+            version = 1,
+            saveRevision = 1,
+            profile = { schemaVersion = 1, scrap = -10 },
+        },
+        userIds = { 508 },
+        metadata = {},
+    }
+    local profileStore = makeProfileStore(dataStore)
+    local recovered, reason = profileStore:load(508, defaults)
+    expect(recovered == nil and string.find(reason, "InvalidScrap") ~= nil)
+    expect(dataStore.records.Player_508.value.scrap == -5)
+    local quarantineExists = false
+    for key in dataStore.records do
+        quarantineExists = quarantineExists
+            or string.sub(key, 1, #"Quarantine_508_") == "Quarantine_508_"
+    end
+    expect(quarantineExists, "the original corrupt value remains preserved in quarantine")
+end)
+
+test("profile store leaves quarantined corruption unavailable when no backup exists", function()
+    local dataStore = makeFakeDataStore()
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "missing-backup-starter"
+    end)
+    dataStore.records.Player_510 = {
+        value = { schemaVersion = 1, scrap = "broken" },
+        userIds = { 510 },
+        metadata = {},
+    }
+    local profileStore = makeProfileStore(dataStore)
+    local recovered, reason = profileStore:load(510, defaults)
+    expect(recovered == nil and string.find(reason, "BackupMissing") ~= nil)
+    expect(dataStore.records.Player_510.value.scrap == "broken")
+    local quarantined = false
+    for key in dataStore.records do
+        quarantined = quarantined or string.sub(key, 1, #"Quarantine_510_") == "Quarantine_510_"
+    end
+    expect(quarantined, "corrupt data is preserved without falling back to a fresh profile")
+end)
+
+test("schema-one legacy fixture keeps stable ownership without a fabricated migration", function()
+    local dataStore = makeFakeDataStore()
+    local legacy = PlayerDataService.createDefaultProfile(function()
+        return "legacy-v1-starter"
+    end)
+    legacy.welcomeCreatureId = nil
+    legacy.firstRaidParticipation = nil
+    dataStore.records.Player_511 = {
+        value = cloneTable(legacy),
+        userIds = { 511 },
+        metadata = {},
+    }
+    local profileStore = makeProfileStore(dataStore)
+    local loaded, loadError = profileStore:load(511, legacy)
+    expect(loaded ~= nil and loadError == nil)
+    expect(loaded.schemaVersion == 1 and loaded.starterCreatureId == "legacy-v1-starter")
+    expect(PlayerDataService.validateProfile(loaded))
+    expect(profileStore:save(511, loaded, true))
+end)
+
+test("profile save exhaustion reports failure and keeps the session available for retry", function()
+    local dataStore = makeFakeDataStore()
+    local profileStore = makeProfileStore(dataStore)
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "retry-save-starter"
+    end)
+    local profile = profileStore:load(509, defaults)
+    expect(profile ~= nil)
+    profile.scrap = 250
+    dataStore.failuresRemaining = 3
+    local saved, saveError = profileStore:save(509, profile, false)
+    expect(not saved and string.find(saveError, "DataStoreUnavailable") ~= nil)
+    expect(dataStore.records.Player_509.value.scrap == 50)
+    expect(dataStore.records.Player_509.metadata.oddSessionToken ~= nil)
+    expect(profileStore:getLoadedCount() == 1)
+
+    dataStore.failuresRemaining = 0
+    expect(profileStore:save(509, profile, true))
+    expect(dataStore.records.Player_509.value.scrap == 250)
+    expect(dataStore.records.Backup_Player_509.value.profile.scrap == 250)
 end)
 
 test("expired session lease can be taken over and stale server cannot save", function()
@@ -1486,13 +1673,82 @@ test("shutdown saves profiles in parallel and releases session leases", function
         dataStore.records.Player_650.metadata.oddSessionToken == nil,
         "shutdown save should release its lock"
     )
+    expect(
+        #dataStore.records.Player_650.value.creatures == 1
+            and dataStore.records.Player_650.value.creatures[1].id == "shutdown-starter",
+        "shutdown should persist normal ownership without duplication"
+    )
 end)
+
+test("shutdown during carry returns the creature before either profile is saved", function()
+    local context = makeTheftContext()
+    local attemptId = beginAndCarryTheft(context)
+    expect(context.theftService:shutdown(1))
+    expect(context.theftService._attempts[attemptId].state == "RETURNED")
+
+    local ownerData = context.dataServices[context.ownerUserId]
+    local thiefData = context.dataServices[context.thiefUserId]
+    expect(ownerData:saveAllAndRelease(1))
+    expect(thiefData:saveAllAndRelease(1))
+    local ownerProfile =
+        context.profileDataStore.records["Player_" .. tostring(context.ownerUserId)].value
+    local thiefProfile =
+        context.profileDataStore.records["Player_" .. tostring(context.thiefUserId)].value
+    expect(CreatureService.findInProfile(nil, ownerProfile, context.targetId) ~= nil)
+    expect(CreatureService.findInProfile(nil, thiefProfile, context.targetId) == nil)
+end)
+
+test(
+    "shutdown waits for an ambiguous bank decision and committed replay saves one owner",
+    function()
+        local context = makeTheftContext()
+        local deferred = {}
+        context.theftService._schedule = function(callback)
+            table.insert(deferred, callback)
+        end
+        local attemptId = beginAndCarryTheft(context)
+        expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+        context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+        context.journalDataStore.failOnCalls = {
+            [2] = true,
+            [3] = true,
+            [4] = true,
+            [5] = true,
+            [6] = true,
+            [7] = true,
+        }
+        local pending, failure =
+            context.theftService:completeBank(context.thiefUserId, attemptId, "Moss")
+        expect(pending == nil and failure == "ServiceUnavailable")
+        expect(context.theftService._attempts[attemptId].state == "COMMITTING")
+        expect(not context.theftService:shutdown(0), "shutdown must report an unresolved bank")
+
+        context.journalDataStore.failOnCalls = nil
+        local resolve = table.remove(deferred, 1)
+        expect(type(resolve) == "function")
+        resolve()
+        expect(context.theftService._attempts[attemptId].state == "BANKED")
+        expect(context.theftService:shutdown(1))
+
+        local ownerData = context.dataServices[context.ownerUserId]
+        local thiefData = context.dataServices[context.thiefUserId]
+        expect(ownerData:saveAllAndRelease(1))
+        expect(thiefData:saveAllAndRelease(1))
+        local ownerProfile =
+            context.profileDataStore.records["Player_" .. tostring(context.ownerUserId)].value
+        local thiefProfile =
+            context.profileDataStore.records["Player_" .. tostring(context.thiefUserId)].value
+        expect(CreatureService.findInProfile(nil, ownerProfile, context.targetId) == nil)
+        expect(CreatureService.findInProfile(nil, thiefProfile, context.targetId) ~= nil)
+        expect(thiefProfile.catalysts.mossSpore == 1)
+    end
+)
 
 test(
     "transfer journal records intent, commits, and clears only after both profiles apply",
     function()
         local fakeStore = makeFakeDataStore()
-        local journal = TransferJournalStore.new({ store = fakeStore })
+        local journal = TransferJournalStore.new({ store = fakeStore, wait = function() end })
         local record = {
             transferId = "transfer-1",
             fromUserId = 701,
@@ -1555,7 +1811,7 @@ test("profile load rolls PREPARED transfers back and COMMITTED transfers forward
             metadata = {},
         }
 
-        local journal = TransferJournalStore.new({ store = fakeStore })
+        local journal = TransferJournalStore.new({ store = fakeStore, wait = function() end })
         local transfer = {
             transferId = "journal-transfer",
             fromUserId = 711,
@@ -1602,7 +1858,10 @@ test("profile load rolls PREPARED transfers back and COMMITTED transfers forward
     local restoredThief = rollback:getSnapshot(712)
     expect(#restoredOwner.creatures == 2)
     expect(restoredOwner.creatures[2].id == "journal-creature")
-    expect(#restoredThief.creatures == 1 and restoredThief.catalysts.prismDust == 0)
+    expect(
+        #restoredThief.creatures == 1 and restoredThief.catalysts.prismDust == 1,
+        "rollback must not remove a catalyst the profile already owned"
+    )
     expect(#rollbackJournal:getForUser(711) == 0)
     expect(rollbackStore.records.Player_711.value.creatures[2].id == "journal-creature")
 
@@ -1615,6 +1874,111 @@ test("profile load rolls PREPARED transfers back and COMMITTED transfers forward
     expect(committedThief.catalysts.prismDust == 1)
     expect(#commitJournal:getForUser(712) == 0)
     expect(commitStore.records.Player_712.value.creatures[2].id == "journal-creature")
+end)
+
+test("transfer journal retries storage errors and stays bounded and schema-strict", function()
+    local retryStore = makeFakeDataStore()
+    retryStore.failuresRemaining = 2
+    local waits = 0
+    local journal = TransferJournalStore.new({
+        store = retryStore,
+        wait = function()
+            waits += 1
+        end,
+    })
+    local record = {
+        transferId = "retry-journal",
+        fromUserId = 901,
+        toUserId = 902,
+        raidId = "retry-raid",
+        creature = { id = "retry-creature", speciesId = "PocketHydra" },
+        catalystThemeId = "Ember",
+        createdAtUnix = 1_000,
+    }
+    expect(journal:prepare(record), "prepared writes retry within the configured limit")
+    expect(retryStore.calls == 3 and waits == 2)
+    retryStore.failAfterWriteOnCall = 4
+    expect(journal:commit(record.transferId), "an ambiguous committed write is idempotent")
+    retryStore.getFailuresRemaining = 2
+    local recoveredRecords = journal:getForUser(record.toUserId)
+    expect(#recoveredRecords == 1 and recoveredRecords[1].state == "COMMITTED")
+    expect(waits == 5, "read and write retries use bounded backoff")
+
+    local strictStore = makeFakeDataStore()
+    local strictJournal = TransferJournalStore.new({ store = strictStore, wait = function() end })
+    expect(strictJournal:prepare(record))
+    strictStore.records.OddlingsTransfersV1.value.records[record.transferId].unexpected = true
+    local corruptRecords, corruptError = strictJournal:getForUser(record.fromUserId)
+    expect(corruptRecords == nil and corruptError == "InvalidTransferJournal")
+
+    local boundedStore = makeFakeDataStore()
+    local boundedJournal = TransferJournalStore.new({ store = boundedStore, wait = function() end })
+    for index = 1, 64 do
+        local boundedRecord = {
+            transferId = "bounded-" .. tostring(index),
+            fromUserId = 10_000 + index,
+            toUserId = 20_000 + index,
+            raidId = "bounded-raid",
+            creature = { id = "bounded-creature-" .. tostring(index), speciesId = "PocketHydra" },
+            catalystThemeId = "Prism",
+            createdAtUnix = 1_000,
+        }
+        expect(boundedJournal:prepare(boundedRecord))
+    end
+    local overflow, overflowError = boundedJournal:prepare({
+        transferId = "bounded-overflow",
+        fromUserId = 30_001,
+        toUserId = 30_002,
+        raidId = "bounded-raid",
+        creature = { id = "bounded-overflow-creature", speciesId = "PocketHydra" },
+        catalystThemeId = "Moss",
+        createdAtUnix = 1_000,
+    })
+    expect(not overflow and overflowError == "TransferJournalUnavailable")
+    local count = 0
+    for _ in boundedStore.records.OddlingsTransfersV1.value.records do
+        count += 1
+    end
+    expect(count == 64, "journal overflow fails closed without evicting transfers")
+end)
+
+test("failed transfer intent preparation preserves the original owner and can retry", function()
+    local context = makeTheftContext()
+    local attemptId = beginAndCarryTheft(context)
+    expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+    context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    context.journalDataStore.failuresRemaining = 3
+    local bankFailed, failure =
+        context.theftService:completeBank(context.thiefUserId, attemptId, "Prism")
+    expect(bankFailed == nil and failure == "ServiceUnavailable")
+    expect(context.theftService._attempts[attemptId].state == "CARRIED")
+    expect(
+        CreatureService.findInProfile(
+            nil,
+            context.dataService:getSnapshot(context.ownerUserId),
+            context.targetId
+        )
+    )
+    expect(
+        CreatureService.findInProfile(
+            nil,
+            context.dataService:getSnapshot(context.thiefUserId),
+            context.targetId
+        ) == nil
+    )
+    local emptyJournal = context.journalDataStore.records.OddlingsTransfersV1.value
+    expect(next(emptyJournal.records) == nil)
+
+    expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+    context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    expect(context.theftService:completeBank(context.thiefUserId, attemptId, "Prism"))
+    expect(
+        CreatureService.findInProfile(
+            nil,
+            context.dataService:getSnapshot(context.thiefUserId),
+            context.targetId
+        )
+    )
 end)
 
 test("elapsed first-Raid marker is normalized before profile exposure", function()
@@ -1957,7 +2321,7 @@ test(
         local begun = context.theftService:beginTheft(context.thiefUserId, context.targetId)
         expect(begun ~= nil)
         context.positions[context.ownerUserId] = context.positions[context.thiefUserId]
-        local tagged, tagError = context.theftService:tag(context.ownerUserId, context.thiefUserId)
+        local tagged, tagError = context.tagService:tag(context.ownerUserId, context.thiefUserId)
         expect(tagged ~= nil and tagError == nil and tagged.success)
         expect(tagged.result == "Cancelled")
         expect(context.theftService._attempts[begun.attemptId].state == "RETURNED")
@@ -1966,20 +2330,19 @@ test(
             "Tag applies a one-second stagger"
         )
         local repeated, repeatedError =
-            context.theftService:tag(context.ownerUserId, context.thiefUserId)
+            context.tagService:tag(context.ownerUserId, context.thiefUserId)
         expect(
             repeated == nil and repeatedError == "RateLimited",
             "successful Tag starts defender cooldown"
         )
         context.monotonicNow.value += RaidConfig.TAG_STAGGER_SECONDS
-        expect(context.theftService:step(context.monotonicNow.value))
+        expect(context.tagService:step(context.monotonicNow.value))
         expect(context.humanoids[context.thiefUserId].WalkSpeed == 16)
 
         local carried = makeTheftContext()
         local attemptId = beginAndCarryTheft(carried)
         carried.positions[carried.ownerUserId] = carried.positions[carried.thiefUserId]
-        local dropped, dropError =
-            carried.theftService:tag(carried.ownerUserId, carried.thiefUserId)
+        local dropped, dropError = carried.tagService:tag(carried.ownerUserId, carried.thiefUserId)
         expect(dropped ~= nil and dropError == nil and dropped.result == "Dropped")
         local attempt = carried.theftService._attempts[attemptId]
         expect(attempt.state == "DROPPED")
@@ -2004,9 +2367,9 @@ test(
         local immune = makeTheftContext({ userIds = { 1_231, 1_232, 1_233 } })
         local firstAttempt = immune.theftService:beginTheft(immune.thiefUserId, immune.targetId)
         immune.positions[immune.ownerUserId] = immune.positions[immune.thiefUserId]
-        expect(immune.theftService:tag(immune.ownerUserId, immune.thiefUserId))
+        expect(immune.tagService:tag(immune.ownerUserId, immune.thiefUserId))
         immune.monotonicNow.value += RaidConfig.TAG_STAGGER_SECONDS
-        expect(immune.theftService:step(immune.monotonicNow.value))
+        expect(immune.tagService:step(immune.monotonicNow.value))
         local thirdTargetId = "third-owner-target"
         local thirdSpecies = CreatureDefinitions.SpeciesIdsByRarity.Common[3]
         local thirdAdded = immune.dataServices[1_233]:transact(1_233, function(profile)
@@ -2022,17 +2385,27 @@ test(
         immune.positions[1_233] = immune.positions[immune.thiefUserId]
         local secondAttempt = immune.theftService:beginTheft(immune.thiefUserId, thirdTargetId)
         expect(secondAttempt ~= nil and secondAttempt.attemptId ~= firstAttempt.attemptId)
-        local immuneTag = immune.theftService:tag(1_233, immune.thiefUserId)
+        local immuneTag = immune.tagService:tag(1_233, immune.thiefUserId)
         expect(immuneTag ~= nil and not immuneTag.success and immuneTag.result == "Miss")
         expect(immune.theftService._attempts[secondAttempt.attemptId].state == "CHANNELING")
     end
 )
 
+test("Tag rejects non-finite server-observed positions", function()
+    local context = makeTheftContext()
+    local attempt = context.theftService:beginTheft(context.thiefUserId, context.targetId)
+    expect(attempt ~= nil)
+    context.positions[context.ownerUserId] = { X = math.huge, Y = 0, Z = 0 }
+    local result, tagError = context.tagService:tag(context.ownerUserId, context.thiefUserId)
+    expect(result ~= nil and tagError == nil and not result.success and result.result == "Miss")
+    expect(context.theftService._attempts[attempt.attemptId].state == "CHANNELING")
+end)
+
 test("dropped creatures auto-return and disconnect or reset cancels active theft", function()
     local context = makeTheftContext()
     local attemptId = beginAndCarryTheft(context)
     context.positions[context.ownerUserId] = context.positions[context.thiefUserId]
-    expect(context.theftService:tag(context.ownerUserId, context.thiefUserId))
+    expect(context.tagService:tag(context.ownerUserId, context.thiefUserId))
     local attempt = context.theftService._attempts[attemptId]
     context.monotonicNow.value += RaidConfig.RECOVERY_WINDOW_SECONDS
     expect(context.theftService:step(context.monotonicNow.value))
@@ -2223,6 +2596,7 @@ test(
                 end,
             },
             theftService = context.theftService,
+            tagService = context.tagService,
             baseService = context.baseService,
             requestEvent = {},
             resultEvent = {},
@@ -2251,6 +2625,13 @@ test(
         altered.payload.targetCreatureId = "different-creature"
         local conflict = actionService:handle(player, altered)
         expect(not conflict.ok and conflict.code == "Conflict")
+        local tagMiss = actionService:handle(player, {
+            sessionId = player.sessionId,
+            requestId = "tag-action",
+            action = "Tag",
+            payload = { targetUserId = context.ownerUserId },
+        })
+        expect(tagMiss.ok and not tagMiss.data.success and tagMiss.data.result == "Miss")
 
         local peace = makeTheftContext({ phase = "PEACE" })
         local peacePlayer = peace.players[peace.thiefUserId]
@@ -2267,6 +2648,7 @@ test(
             capsuleService = {},
             mutationService = { getOddsSnapshot = function() end, getPending = function() end },
             theftService = peace.theftService,
+            tagService = peace.tagService,
             baseService = peace.baseService,
             requestEvent = {},
             resultEvent = {},

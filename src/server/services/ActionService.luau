@@ -165,6 +165,7 @@ function ActionService.new(options: any)
         _capsuleService = options.capsuleService,
         _mutationService = options.mutationService,
         _theftService = options.theftService,
+        _tagService = options.tagService or options.theftService,
         _baseService = options.baseService,
         _requestEvent = options.requestEvent,
         _resultEvent = options.resultEvent,
@@ -432,7 +433,7 @@ function ActionService._dispatch(
             )
         end
     elseif request.action == "Tag" then
-        data, errorCode = self._theftService:tag(session.userId, request.payload.targetUserId)
+        data, errorCode = self._tagService:tag(session.userId, request.payload.targetUserId)
     elseif request.action == "RecoverDroppedCreature" then
         data, errorCode =
             self._theftService:beginRecovery(session.userId, request.payload.attemptId)
