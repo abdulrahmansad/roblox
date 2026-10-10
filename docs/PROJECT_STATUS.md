@@ -1,8 +1,13 @@
 # Project status
 
-Status: V1 implementation is in progress at **M3 — Capsules, sales, and capacity**. M1 and M2 remain committed. M3's portable implementation and full local verification pass are complete; its focused commit and push are being closed before M4. The V1 design remains frozen.
+Status: V1 implementation is in progress at **M4 — Mutations**. M1–M3 are committed and pushed. M3's portable implementation and full local verification pass are complete; Studio checks remain pending. The V1 design remains frozen.
 
-## Current milestone: M3
+## Current milestone: M4
+
+- M4 implementation is beginning from the approved mutation catalog, odds, tutorial, and choice contracts in [MUTATIONS.md](MUTATIONS.md), [DATA_MODEL.md](DATA_MODEL.md), [STATE_MACHINES.md](STATE_MACHINES.md), and [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md). No M4 runtime implementation has been committed yet.
+- M3 remains portable-verified as summarized below; engine-backed Studio checks remain pending.
+
+## M3 — Capsules, sales, and capacity
 
 - Implemented server-selected Welcome and Standard Capsules, all 12 species definitions, persistent standard-capsule pity, stable creature IDs, duplicate species, one-time Welcome tracking, starter/Welcome theft-protection checks, fixed 60-Scrap sales, Slot 3/4 purchases, and four blockout stand/display slots per base.
 - Added the centralized M3 `ActionRequest`, `ActionResult`, and `DomainEvent` remotes for `PurchaseCapsule`, `SellCreature`, `PurchaseSlot`, and `GetSnapshot`. Requests validate exact payload shapes, session identity, server-observed operational state/proximity, transport/action throttles, and replay bodies.
@@ -14,7 +19,7 @@ Status: V1 implementation is in progress at **M3 — Capsules, sales, and capaci
 
 - **M1 — Session and base:** eight deterministic base slots, temporary greybox, join/leave lifecycle, character spawn relocation, phase snapshot inheritance, operational readiness, and cleanup. Portable checks pass; Studio checks are pending.
 - **M2 — Starter and online income:** validated profile defaults and persistence adapter, session lock/save/retry coverage, stable starter, exact 40 Scrap/min income, online-only 10-second payouts with fractional carry, and leaderboard values. Portable checks pass; live DataStore and Studio checks are pending.
-- **M3 — Capsules, sales, and capacity:** portable implementation and verification pass as described above; Studio check pending. The M3 commit/push is in progress.
+- **M3 — Capsules, sales, and capacity:** portable implementation and verification pass as described above; Studio check pending. Commit `10a4f4846c79d89fbe13424abcaffb93f7f0e273` is pushed to `origin/main`.
 
 ## Locked planning contracts
 
@@ -34,4 +39,4 @@ M4–M12 remain: mutations, timed Raid state, theft/Tag/recovery, persistence ha
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. The last confirmed synchronized readiness commit is `92294325f9c44aa038cccd8cf9bb068be5526611`; M3 changes are locally verified and the milestone commit/push is in progress. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. Local `HEAD` and `origin/main` match at `10a4f4846c79d89fbe13424abcaffb93f7f0e273`, the M3 milestone commit. Historical M3 backup copies remain in the local stashes.

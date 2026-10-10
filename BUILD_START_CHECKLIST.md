@@ -1,6 +1,6 @@
 # Build start checklist
 
-V1 pre-build readiness is complete, and the V1 build is now in progress. M1 and M2 are committed. M3's portable implementation and verification pass are complete; Studio checks remain pending while work proceeds to M4.
+V1 pre-build readiness is complete, and the V1 build is now in progress. M1–M3 are committed and pushed. M3's portable implementation and verification pass are complete; Studio checks remain pending while work proceeds to M4.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -18,10 +18,10 @@ V1 pre-build readiness is complete, and the V1 build is now in progress. M1 and 
 | Studio status | **KNOWN — HUMAN CHECK PENDING** | Roblox Studio is not installed in the inspected locations; sign-in cannot be checked and the Rojo plugin cannot be verified. No Studio success is claimed. |
 | Existing M1/M2 implementation | **PORTABLE PASS; STUDIO PENDING** | Session/base, profile persistence, and online income are committed on `main`; engine-backed and live DataStore checks remain pending. |
 | M3 | **PORTABLE PASS; STUDIO PENDING** | Capsule, creature, sale, slot, stand projection, and centralized action code pass the 37-test suite and Rojo build. Studio kiosk and visual stand checks remain pending. |
-| M4–M12 | **READY TO IMPLEMENT; NOT STARTED** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
-| Git | **M3 COMMIT/PUSH IN PROGRESS** | The readiness baseline was synchronized at `92294325f9c44aa038cccd8cf9bb068be5526611`; M3 changes are being closed in a focused commit and will be synchronized before M4. |
+| M4–M12 | **M4 STARTING; M5–M12 READY** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
+| Git | **M3 PUSHED** | `main` and `origin/main` match at `10a4f4846c79d89fbe13424abcaffb93f7f0e273`. |
 
-Historical copies of the paused M3 work remain in the local stashes; the active M3 implementation has been restored to the worktree for completion.
+Historical copies of the paused M3 work remain in local stashes after the M3 implementation was committed.
 
 ## Human-only action
 
