@@ -111,6 +111,7 @@ function PlayerDataService.new(options: any)
         _dirty = {},
         _revision = {},
         _closing = {},
+        _transacting = {},
         _saving = {},
         _autoSaveTokens = {},
         _stopped = false,
@@ -199,7 +200,13 @@ function PlayerDataService.validateProfile(profile: any): (boolean, string?)
             return false, "InvalidStarterSpecies"
         end
     end
-    if profile.slotCapacity ~= 2 and profile.slotCapacity ~= 3 and profile.slotCapacity ~= 4 then
+    if
+        not isIntegerBetween(
+            profile.slotCapacity,
+            EconomyConfig.STARTER_SLOT_CAPACITY,
+            EconomyConfig.MAX_SLOT_CAPACITY
+        )
+    then
         return false, "InvalidSlotCapacity"
     end
     if profile.slotCapacity < creatureCount then
@@ -382,6 +389,56 @@ function PlayerDataService.getCreatures(self: any, userId: number): { any }?
     return cloneValue(profile.creatures)
 end
 
+function PlayerDataService.getRevision(self: any, userId: number): number?
+    if self._profiles[userId] == nil then
+        return nil
+    end
+    return self._revision[userId]
+end
+
+function PlayerDataService.transact(
+    self: any,
+    userId: number,
+    operation: (any) -> (any, string?)
+): (boolean, any?, string?)
+    local current = self._profiles[userId]
+    if current == nil then
+        return false, nil, "ProfileNotLoaded"
+    end
+    if self._closing[userId] then
+        return false, nil, "ProfileClosing"
+    end
+    if self._transacting[userId] then
+        return false, nil, "Conflict"
+    end
+    if type(operation) ~= "function" then
+        return false, nil, "InvalidOperation"
+    end
+
+    self._transacting[userId] = true
+    local draft = cloneValue(current)
+    local callOk, result, operationError = pcall(operation, draft)
+    self._transacting[userId] = nil
+    if not callOk then
+        return false, nil, "Unavailable"
+    end
+    if operationError ~= nil then
+        return false, nil, operationError
+    end
+    if result == nil then
+        return false, nil, "Conflict"
+    end
+    local valid, validationError = PlayerDataService.validateProfile(draft)
+    if not valid then
+        return false, nil, validationError or "InvalidProfile"
+    end
+
+    self._profiles[userId] = draft
+    self._dirty[userId] = true
+    self._revision[userId] += 1
+    return true, cloneValue(result), nil
+end
+
 function PlayerDataService.creditScrap(
     self: any,
     userId: number,
@@ -393,6 +450,9 @@ function PlayerDataService.creditScrap(
     end
     if self._closing[userId] then
         return false, 0, profile.scrap, "ProfileClosing"
+    end
+    if self._transacting[userId] then
+        return false, 0, profile.scrap, "Conflict"
     end
     if not isIntegerBetween(amount, 0, EconomyConfig.MAX_SCRAP) then
         return false, 0, profile.scrap, "InvalidAmount"

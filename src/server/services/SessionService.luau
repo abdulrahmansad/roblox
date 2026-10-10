@@ -60,6 +60,9 @@ function SessionService.new(options: any)
         _onRejected = options.onRejected,
         _onSessionReady = options.onSessionReady,
         _onSessionEnded = options.onSessionEnded,
+        _generateSessionId = options.generateSessionId or function(_player, token)
+            return "session-" .. tostring(token)
+        end,
         _onOperationalChanged = options.onOperationalChanged,
         _sessions = {},
         _pending = {},
@@ -175,9 +178,21 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     end
 
     local phaseSnapshot = self._raidService:getSnapshot()
+    local sessionId = self._generateSessionId(player, token)
+    if type(sessionId) ~= "string" or #sessionId < 8 or #sessionId > 128 then
+        self._baseService:release(player)
+        if self._saveProfile ~= nil then
+            pcall(self._saveProfile, player)
+        end
+        if self._onRejected ~= nil then
+            self._onRejected(player, "SessionInitializationFailed")
+        end
+        return false, "SessionInitializationFailed"
+    end
     local session = {
         player = player,
         userId = userId,
+        sessionId = sessionId,
         baseId = base.id,
         base = base,
         phase = phaseSnapshot.phase,
@@ -188,6 +203,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     self._sessions[userId] = session
 
     setAttribute(player, "OddlingsBaseId", base.id)
+    setAttribute(player, "OddlingsSessionId", sessionId)
     setAttribute(player, "OddlingsOperational", false)
     SessionService._applyPhase(session, phaseSnapshot.phase)
 
@@ -197,6 +213,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
             self._baseService:release(player)
             self._sessions[userId] = nil
             setAttribute(player, "OddlingsBaseId", nil)
+            setAttribute(player, "OddlingsSessionId", nil)
             setAttribute(player, "OddlingsRaidPhase", nil)
             if self._onSessionEnded ~= nil then
                 pcall(self._onSessionEnded, player)
@@ -337,6 +354,7 @@ function SessionService.onPlayerRemoving(self: any, player: any): boolean
     self._baseService:release(player)
     self._sessions[userId] = nil
     setAttribute(player, "OddlingsBaseId", nil)
+    setAttribute(player, "OddlingsSessionId", nil)
     setAttribute(player, "OddlingsOperational", false)
     setAttribute(player, "OddlingsRaidPhase", nil)
     return true
@@ -350,6 +368,7 @@ function SessionService.getSession(self: any, player: any): any?
     end
     return {
         userId = session.userId,
+        sessionId = session.sessionId,
         baseId = session.baseId,
         phase = session.phase,
         operational = session.operational,

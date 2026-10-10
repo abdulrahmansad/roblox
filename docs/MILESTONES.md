@@ -47,7 +47,8 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Player-visible result:** Player can claim one Welcome Uncommon, collect duplicates, sell non-starters, and reach four stands.
 - **Tests:** Welcome one-time 120 Scrap / guaranteed Uncommon; standard 70/25/5 and deterministic pity floor cases; capacity/funds/phase; sale starter lock; slot costs/prerequisites; duplicate request and race tests.
 - **Acceptance:** Server picks results; Welcome never changes pity and cannot be claimed twice; pity counters obey 3/8 floors; no purchase/sale exceeds capacity or bypasses cost; starter cannot be sold.
-- **Docs:** `CREATURES.md`, `ECONOMY.md`, `DATA_MODEL.md`, `NETWORK_PROTOCOL.md`, `TESTING.md`.
+- **Current evidence:** Portable verification passes formatting, Selene with 0 warnings/errors, 37 Lune tests, and Rojo build. The tests cover 12 catalog entries, Welcome selection/one-time tracking, exact standard-odds boundaries and pity floors, insufficient Scrap/full capacity, unique IDs and duplicates, starter/Welcome protection flags, stand collection/capacity mapping, sale/slot rules, replay-body conflict, transport/action throttles, and response-send failure. Studio visual stand and in-world kiosk checks remain pending because Roblox Studio is unavailable.
+- **Docs:** `ARCHITECTURE.md`, `CREATURES.md`, `ECONOMY.md`, `DATA_MODEL.md`, `NETWORK_PROTOCOL.md`, `SECURITY.md`, `TESTING.md`, `PROJECT_STATUS.md`.
 - **Commit boundary:** One capsule/capacity commit with no mutation code.
 
 ## M4 — Mutations

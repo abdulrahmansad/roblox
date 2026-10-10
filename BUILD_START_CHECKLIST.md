@@ -1,6 +1,6 @@
 # Build start checklist
 
-V1 pre-build readiness review is complete. M1 and M2 foundation code is already committed; this readiness phase changes documentation only. The implementation branch is ready to resume at M3 after the documented Studio-only M0/M1/M2 checks are completed.
+V1 pre-build readiness is complete, and the V1 build is now in progress. M1 and M2 are committed. M3's portable implementation and verification pass are complete; Studio checks remain pending while work proceeds to M4.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -12,20 +12,21 @@ V1 pre-build readiness review is complete. M1 and M2 foundation code is already 
 | State machines locked | **PASS — SPECIFICATION** | [STATE_MACHINES.md](docs/STATE_MACHINES.md) defines Raid, theft, mutation, and Welcome protection transitions. |
 | Test matrix ready | **PASS — SPECIFICATION** | [TESTING.md](docs/TESTING.md) covers capsule, mutation, Raid, Welcome protection, theft, Tag, persistence, protocol, Studio, and monetization. |
 | M0–M12 ready | **PASS — SPECIFICATION** | [MILESTONES.md](docs/MILESTONES.md) defines scope, non-goals, dependencies, results, tests, acceptance, docs, and commit boundaries. |
-| Toolchain | **PASS** | Pinned tools match; `./scripts/verify.ps1` passes format, lint (0 warnings/errors), 24 portable tests, and Rojo build. PowerShell scripts and pinned versions were checked. No skill-specific validator is supplied in the repository. |
+| Toolchain | **PASS** | Pinned tools match; current `./scripts/verify.ps1` passes format, lint (0 warnings/errors), 37 portable tests, and Rojo build. PowerShell scripts and pinned versions were checked. No skill-specific validator is supplied in the repository. |
 | Rojo configuration/build | **PASS** | `default.project.json` builds successfully. |
 | Rojo serve workflow | **PASS** | `./scripts/serve.ps1` served `127.0.0.1:34872` with HTTP 200; the process was stopped after checking. Connection and two-client steps are documented in [tests/multiplayer/README.md](tests/multiplayer/README.md). |
 | Studio status | **KNOWN — HUMAN CHECK PENDING** | Roblox Studio is not installed in the inspected locations; sign-in cannot be checked and the Rojo plugin cannot be verified. No Studio success is claimed. |
 | Existing M1/M2 implementation | **PORTABLE PASS; STUDIO PENDING** | Session/base, profile persistence, and online income are committed on `main`; engine-backed and live DataStore checks remain pending. |
-| M3–M12 | **READY TO IMPLEMENT; NOT ON `main`** | Milestones are specified; no later milestone is included in the branch. |
-| Git | **PASS — CLEAN AND SYNCHRONIZED** | `main` points to `abdulrahmansad/roblox`; the readiness documentation is pushed and local `main` matches `origin/main`. |
+| M3 | **PORTABLE PASS; STUDIO PENDING** | Capsule, creature, sale, slot, stand projection, and centralized action code pass the 37-test suite and Rojo build. Studio kiosk and visual stand checks remain pending. |
+| M4–M12 | **READY TO IMPLEMENT; NOT STARTED** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
+| Git | **M3 COMMIT/PUSH IN PROGRESS** | The readiness baseline was synchronized at `92294325f9c44aa038cccd8cf9bb068be5526611`; M3 changes are being closed in a focused commit and will be synchronized before M4. |
 
-The pre-existing uncommitted M3 work was preserved in the local stash `paused M3 gameplay during pre-build readiness`; it is excluded from `main` and from this readiness commit.
+Historical copies of the paused M3 work remain in the local stashes; the active M3 implementation has been restored to the worktree for completion.
 
 ## Human-only action
 
-Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke and the M1/M2 Studio checks in [tests/multiplayer/README.md](tests/multiplayer/README.md), including live DataStore/API-services and leaderboard behavior.
+Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke, M1/M2 join/DataStore checks, and M3 kiosk/stand interaction smoke in [tests/multiplayer/README.md](tests/multiplayer/README.md).
 
 ## Verdict
 
-**READY TO BUILD** — the design and implementation contracts are locked, portable checks pass, and the remaining Studio-only step is explicit.
+**BUILD IN PROGRESS** — the locked V1 plan is being implemented milestone by milestone. Studio-only checks remain explicit and do not block portable M4 work.

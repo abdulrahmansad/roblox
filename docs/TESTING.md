@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. `tests/run.luau` checks protocol and request validation, base/session lifecycle, profile defaults and validation, DataStore lease/save/retry behavior through a deterministic fake, rejoin restoration, capped Scrap, fractional online income, and no offline accrual.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults and fake DataStore behavior, online income, M3 capsule odds/pity/capacity, creature protection and stand projection, sale/slot costs, action replay/body conflicts, rate limits, and disconnect-safe response delivery. The latest M3 run passed 37 tests; Lune does not simulate Roblox Studio or multiplayer.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -39,7 +39,7 @@ This engine-backed command was not run during bootstrap because Roblox Studio is
 
 ## Future implementation test matrix
 
-These are required cases for the listed milestones; later gameplay coverage is not implemented yet. M1 has portable base/session/phase tests; M2 covers schema defaults, validation, lock/retry/save behavior through a fake DataStore, rejoin restoration, capped balances, and online-only income. Add assertions with the behavior they protect as each system is built. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
+These are required cases for the listed milestones. M1 and M2 portable coverage is in place; M3 now covers the portable capsule, capacity, sale, protection, stand-projection, and network-action cases. M4–M12 coverage remains to be added alongside implementation. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
 
 | Area | Cases and expected result | Test layer / milestone |
 | --- | --- | --- |

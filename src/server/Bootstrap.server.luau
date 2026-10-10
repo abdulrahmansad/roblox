@@ -13,6 +13,9 @@ local RaidService = require(ServerScriptService.Server.services.RaidService)
 local SessionService = require(ServerScriptService.Server.services.SessionService)
 local PlayerDataService = require(ServerScriptService.Server.services.PlayerDataService)
 local EconomyService = require(ServerScriptService.Server.services.EconomyService)
+local CreatureService = require(ServerScriptService.Server.services.CreatureService)
+local CapsuleService = require(ServerScriptService.Server.services.CapsuleService)
+local ActionService = require(ServerScriptService.Server.services.ActionService)
 local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
@@ -43,7 +46,46 @@ local playerDataService = PlayerDataService.new({
     autoSaveEnabled = true,
     autoSaveIntervalSeconds = EconomyConfig.AUTOSAVE_INTERVAL_SECONDS,
 })
-local economyService = EconomyService.new({ playerDataService = playerDataService })
+local creatureService = CreatureService.new({
+    playerDataService = playerDataService,
+    baseService = baseService,
+})
+local economyService = EconomyService.new({
+    playerDataService = playerDataService,
+    creatureService = creatureService,
+})
+local capsuleService = CapsuleService.new({
+    playerDataService = playerDataService,
+    creatureService = creatureService,
+    generateCreatureId = function()
+        return HttpService:GenerateGUID(false)
+    end,
+})
+
+local networkFolder = ReplicatedStorage:FindFirstChild("Network")
+if networkFolder == nil then
+    networkFolder = Instance.new("Folder")
+    networkFolder.Name = "Network"
+    networkFolder.Parent = ReplicatedStorage
+end
+
+local function ensureRemoteEvent(name: string): any
+    local remote = networkFolder:FindFirstChild(name)
+    if remote == nil then
+        remote = Instance.new("RemoteEvent")
+        remote.Name = name
+        remote.Parent = networkFolder
+    end
+    assert(remote:IsA("RemoteEvent"), string.format("%s must be a RemoteEvent", name))
+    return remote
+end
+
+local actionRequest = ensureRemoteEvent(Protocol.RemoteNames.ActionRequest)
+local actionResult = ensureRemoteEvent(Protocol.RemoteNames.ActionResult)
+local domainEvent = ensureRemoteEvent(Protocol.RemoteNames.DomainEvent)
+local blockout = Workspace:WaitForChild("OddlingsBlockout")
+local kioskPart = blockout:WaitForChild("CommonsKiosk")
+local actionService: any = nil
 local sessionService = SessionService.new({
     baseService = baseService,
     raidService = raidService,
@@ -62,10 +104,22 @@ local sessionService = SessionService.new({
         return saved, reason
     end,
     onSessionReady = function(player)
+        local synced, syncError = creatureService:syncPlayer(player.UserId)
+        if not synced then
+            warn(string.format("[Base] Could not sync collection: %s", tostring(syncError)))
+            return false
+        end
         return economyService:startPlayer(player)
     end,
     onSessionEnded = function(player)
         economyService:stopPlayer(player)
+        creatureService:cleanupUser(player.UserId)
+        if actionService ~= nil then
+            actionService:clearUser(player.UserId)
+        end
+    end,
+    generateSessionId = function()
+        return HttpService:GenerateGUID(false)
     end,
     onRejected = function(player, reason)
         warn(string.format("[Session] Rejecting player: %s", reason))
@@ -76,8 +130,22 @@ local sessionService = SessionService.new({
         end
     end,
 })
+actionService = ActionService.new({
+    sessionService = sessionService,
+    raidService = raidService,
+    playerDataService = playerDataService,
+    economyService = economyService,
+    capsuleService = capsuleService,
+    baseService = baseService,
+    requestEvent = actionRequest,
+    resultEvent = actionResult,
+    domainEvent = domainEvent,
+    kioskPart = kioskPart,
+})
+assert(actionService:start(), "ActionService failed to start")
 assert(sessionService:start(Players), "SessionService failed to start")
 game:BindToClose(function()
+    actionService:stop()
     for _, player in Players:GetPlayers() do
         economyService:stopPlayer(player)
     end
@@ -89,13 +157,6 @@ game:BindToClose(function()
 end)
 
 local pingService = DevPingService.new(Protocol, RequestGuard)
-
-local networkFolder = ReplicatedStorage:FindFirstChild("Network")
-if networkFolder == nil then
-    networkFolder = Instance.new("Folder")
-    networkFolder.Name = "Network"
-    networkFolder.Parent = ReplicatedStorage
-end
 
 local pingRemote = networkFolder:FindFirstChild(Protocol.RemoteNames.DevPing)
 if pingRemote == nil then

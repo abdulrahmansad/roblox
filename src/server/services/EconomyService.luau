@@ -61,9 +61,14 @@ function EconomyService.new(options: any)
     assert(type(options.playerDataService) == "table", "playerDataService is required")
     assert(type(options.playerDataService.getSnapshot) == "function", "getSnapshot is required")
     assert(type(options.playerDataService.creditScrap) == "function", "creditScrap is required")
+    assert(
+        type(options.playerDataService.transact) == "function",
+        "profile transaction is required"
+    )
 
     return setmetatable({
         _playerDataService = options.playerDataService,
+        _creatureService = options.creatureService,
         _wait = options.wait or defaultWait,
         _schedule = options.schedule or defaultSchedule,
         _publish = options.publish or publishLeaderboard,
@@ -71,6 +76,110 @@ function EconomyService.new(options: any)
         _active = {},
         _fractionalScrap = {},
     }, EconomyService)
+end
+
+local ECONOMY_PHASES = { PEACE = true, WARNING = true, COOLDOWN = true }
+
+function EconomyService.sellCreature(
+    self: any,
+    userId: number,
+    creatureId: string,
+    phase: string
+): (any?, string?)
+    if ECONOMY_PHASES[phase] ~= true then
+        return nil, "WrongPhase"
+    end
+    if self._creatureService == nil then
+        return nil, "Unavailable"
+    end
+
+    local success, data, errorCode = self._playerDataService:transact(userId, function(profile)
+        if profile.scrap > EconomyConfig.MAX_SCRAP - EconomyConfig.CREATURE_SALE_VALUE then
+            return nil, "Unavailable"
+        end
+        local creature, removeError =
+            self._creatureService:removeFromProfile(userId, profile, creatureId)
+        if creature == nil then
+            return nil, if removeError == "StarterProtected" then "Locked" else removeError
+        end
+        profile.scrap += EconomyConfig.CREATURE_SALE_VALUE
+        return {
+            creatureId = creature.id,
+            refund = EconomyConfig.CREATURE_SALE_VALUE,
+            scrapBalance = profile.scrap,
+        },
+            nil
+    end)
+    if not success then
+        return nil, errorCode or "Unavailable"
+    end
+    local synced, syncError = self._creatureService:syncPlayer(userId)
+    if not synced then
+        warn(string.format("[Base] Could not sync collection after sale: %s", tostring(syncError)))
+    end
+    EconomyService.refreshPlayer(self, userId)
+    return data, nil
+end
+
+function EconomyService.purchaseSlot(
+    self: any,
+    userId: number,
+    targetCapacity: number,
+    phase: string
+): (any?, string?)
+    if ECONOMY_PHASES[phase] ~= true then
+        return nil, "WrongPhase"
+    end
+    if targetCapacity ~= 3 and targetCapacity ~= 4 then
+        return nil, "InvalidRequest"
+    end
+
+    local success, data, errorCode = self._playerDataService:transact(userId, function(profile)
+        local price
+        local slot3Capacity = EconomyConfig.STARTER_SLOT_CAPACITY + 1
+        if
+            profile.slotCapacity == EconomyConfig.STARTER_SLOT_CAPACITY
+            and targetCapacity == slot3Capacity
+        then
+            if #profile.creatures < EconomyConfig.STARTER_SLOT_CAPACITY then
+                return nil, "Unavailable"
+            end
+            price = EconomyConfig.SLOT_3_PRICE
+        elseif
+            profile.slotCapacity == slot3Capacity
+            and targetCapacity == EconomyConfig.MAX_SLOT_CAPACITY
+        then
+            if not profile.hasCompletedFirstRaid or #profile.creatures < slot3Capacity then
+                return nil, "Unavailable"
+            end
+            price = EconomyConfig.SLOT_4_PRICE
+        else
+            return nil, "Conflict"
+        end
+        if profile.scrap < price then
+            return nil, "InsufficientScrap"
+        end
+
+        profile.scrap -= price
+        profile.slotCapacity = targetCapacity
+        return { slotCapacity = targetCapacity, scrapBalance = profile.scrap }, nil
+    end)
+    if not success then
+        return nil, errorCode or "Unavailable"
+    end
+    if self._creatureService ~= nil then
+        local synced, syncError = self._creatureService:syncPlayer(userId)
+        if not synced then
+            warn(
+                string.format(
+                    "[Base] Could not sync capacity after slot purchase: %s",
+                    tostring(syncError)
+                )
+            )
+        end
+    end
+    EconomyService.refreshPlayer(self, userId)
+    return data, nil
 end
 
 function EconomyService.getIncomePerMinute(profile: any): number
@@ -99,6 +208,15 @@ function EconomyService._publishCurrent(self: any, player: any, userId: number)
     if profile ~= nil then
         self._publish(player, profile.scrap, EconomyService.getIncomePerMinute(profile))
     end
+end
+
+function EconomyService.refreshPlayer(self: any, userId: number): boolean
+    local active = self._active[userId]
+    if active == nil then
+        return false
+    end
+    self:_publishCurrent(active.player, userId)
+    return true
 end
 
 function EconomyService.startPlayer(self: any, player: any): (boolean, string?)

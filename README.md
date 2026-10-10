@@ -1,6 +1,6 @@
 # Roblox game foundation
 
-This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The V1 design is frozen. M1 session/base services and M2 profiles/online Scrap income are implemented; capsules, mutation transactions, timed raids, theft, and presentation milestones remain.
+This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The V1 design is frozen. M1 session/base services, M2 profiles/online Scrap income, and the portable M3 capsule/creature/sale/capacity implementation are in place. M4–M12 remain, and M0/M1/M2/M3 Studio checks are pending.
 
 ## Prerequisites
 
@@ -51,4 +51,4 @@ In Studio, open a baseplate or place, install the official Rojo 7 plugin from th
 
 Read [AGENTS.md](AGENTS.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) before making project changes.
 
-The locked V1 design starts at [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md). Design does not authorize implementation; gameplay work should begin only when requested.
+The locked V1 design starts at [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md). Follow [docs/MILESTONES.md](docs/MILESTONES.md) for implementation scope and acceptance; do not expand the frozen design.

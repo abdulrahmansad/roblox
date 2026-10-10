@@ -15,6 +15,24 @@ local definitions = {
     PocketHydra = { rarity = "Rare", scrapPerMinute = 120 },
 }
 
+definitions.SpeciesIdsByRarity = table.freeze({
+    Common = table.freeze({
+        "Mossling",
+        "TiffinToad",
+        "PuddlePup",
+        "ButtonBat",
+        "NoodleFinch",
+        "PebbleImp",
+    }),
+    Uncommon = table.freeze({
+        "TeacupCrab",
+        "StaticFinch",
+        "VelvetGremlin",
+        "ClockworkCarp",
+    }),
+    Rare = table.freeze({ "LanternYak", "PocketHydra" }),
+})
+
 function definitions.isSpeciesId(speciesId: any): boolean
     local definition = if type(speciesId) == "string" then definitions[speciesId] else nil
     return type(definition) == "table" and type(definition.scrapPerMinute) == "number"
