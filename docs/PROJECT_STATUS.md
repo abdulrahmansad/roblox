@@ -1,15 +1,20 @@
 # Project status
 
-Status: M1 session/base code is implemented and passes local verification. M0 Studio validation and M1 Studio join/leave validation remain human-blocked because Roblox Studio is not installed. Continue with M2 after this milestone is committed; do not claim M1's Studio integration as passed.
+Status: M2 starter/profile/online-income code is implemented and passes local verification. M0 Studio validation, M1 Studio join/leave validation, and M2 live DataStore/leaderboard validation remain pending because Roblox Studio is not installed. Continue with M3 after the M2 commit is pushed; no Studio integration is claimed.
 
 ## Current milestone
 
-**M1 — Session and base**
+**M2 — Starter and online income**
 
-- Implemented: eight deterministic base slots, a temporary eight-pad greybox, join/leave session lifecycle, character spawn relocation, operational readiness, server phase snapshot inheritance, and cleanup on reset/leave.
-- The M1 profile readiness hook is injectable and covered for failure; it currently defaults to success because M2/M7 persistence is not implemented yet.
-- Portable verification: `./scripts/verify.ps1` passed formatting, Selene (0 errors/warnings), 11 Lune tests, and Rojo build.
-- Studio two-client join/leave and visual spawn checks: pending.
+- Implemented: full version-1 profile defaults and strict validation; atomic DataStore session lease in key metadata; bounded retries; autosave, leave save, and shutdown save; stable starter ID; exact 40 Scrap/min Mossling rate; 10-second online payouts with runtime fractional carry; replicated leaderboard balance/rate.
+- Profile loading completes before a player receives a base. Lock conflicts, unknown schemas, invalid profiles, and exhausted DataStore retries reject the player without replacing saved data.
+- Portable verification: `./scripts/verify.ps1` passed formatting, Selene (0 errors/warnings), 24 Lune tests, and Rojo build.
+- Studio two-client session smoke and live DataStore/API-services/leaderboard behavior: pending.
+
+## Completed milestones
+
+- **M1 — Session and base:** eight deterministic base slots, temporary eight-pad greybox, join/leave lifecycle, character spawn relocation, readiness, phase snapshot inheritance, and cleanup on reset/leave. Portable tests pass; Studio checks are pending.
+- **M2 — Starter and online income:** portable schema, persistence adapter, lock/save/retry fake-store coverage, rejoin restoration, cap checks, and fractional online income pass. Studio checks are pending.
 
 ## Completed planning contracts
 
@@ -25,8 +30,8 @@ The latest `./scripts/verify.ps1` run passed. The `default.project.json` Rojo bu
 
 ## Studio blocker
 
-Roblox Studio is not detected in PATH, the expected LocalAppData/Program Files installation folders, Appx packages, or the local plugin folder. Studio login and Rojo plugin sync cannot be checked. The exact human step is: install and sign in to Roblox Studio, install the Rojo 7 plugin, connect to `localhost:34872`, and complete the M0/M1 two-client smoke in [tests/multiplayer/README.md](../tests/multiplayer/README.md).
+Roblox Studio is not detected in PATH, the expected LocalAppData/Program Files installation folders, Appx packages, or the local plugin folder. Studio login and Rojo plugin sync cannot be checked. The exact human step is: install and sign in to Roblox Studio, install the Rojo 7 plugin, connect to `localhost:34872`, and complete the M0/M1 two-client smoke plus M2 live DataStore/leaderboard check in [tests/multiplayer/README.md](../tests/multiplayer/README.md).
 
 ## Remaining implementation
 
-M2–M12 are not started. The economy, creature catalog runtime, capsules, mutations, timed Raid cycle, theft/Tag, persistence, onboarding/UI, art/map/audio content, hostile playtest, cosmetic pass, and release gates remain. No Studio-based performance, mobile, security, or multiplayer claim is made.
+M3–M12 are not started. Remaining work includes capsules, mutations, timed Raid cycle, theft/Tag, analytics integration, onboarding/UI, art/map/audio content, hostile playtest, cosmetic pass, and release gates. M7 still needs migration, backup/quarantine recovery, and transaction journals. No Studio-based performance, mobile, security, or multiplayer claim is made.

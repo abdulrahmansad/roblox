@@ -53,10 +53,13 @@ function SessionService.new(options: any)
         _baseService = options.baseService,
         _raidService = options.raidService,
         _loadProfile = options.loadProfile or defaultLoadProfile,
+        _saveProfile = options.saveProfile,
         _isPlayer = options.isPlayer or defaultIsPlayer,
         _schedule = options.schedule or defaultSchedule,
         _spawnCharacter = options.spawnCharacter or defaultSpawnCharacter,
         _onRejected = options.onRejected,
+        _onSessionReady = options.onSessionReady,
+        _onSessionEnded = options.onSessionEnded,
         _onOperationalChanged = options.onOperationalChanged,
         _sessions = {},
         _pending = {},
@@ -136,26 +139,35 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     local token = self._nextToken
     self._pending[userId] = token
 
-    local loaded, profileReady = pcall(self._loadProfile, player)
+    local loadCallOk, profileReady, profileError = pcall(self._loadProfile, player)
     if self._pending[userId] ~= token then
+        if loadCallOk and profileReady == true and self._saveProfile ~= nil then
+            pcall(self._saveProfile, player)
+        end
         return false, "SessionCancelled"
     end
     self._pending[userId] = nil
-    if not loaded then
+    if not loadCallOk then
         if self._onRejected ~= nil then
             self._onRejected(player, "ProfileLoadFailed")
         end
         return false, "ProfileLoadFailed"
     end
     if profileReady ~= true then
+        local rejectReason = if type(profileError) == "string"
+            then profileError
+            else "ProfileUnavailable"
         if self._onRejected ~= nil then
-            self._onRejected(player, "ProfileUnavailable")
+            self._onRejected(player, rejectReason)
         end
-        return false, "ProfileUnavailable"
+        return false, rejectReason
     end
 
     local base, baseError = self._baseService:assign(player)
     if base == nil then
+        if self._saveProfile ~= nil then
+            pcall(self._saveProfile, player)
+        end
         if self._onRejected ~= nil then
             self._onRejected(player, baseError or "ServerFull")
         end
@@ -178,6 +190,26 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     setAttribute(player, "OddlingsBaseId", base.id)
     setAttribute(player, "OddlingsOperational", false)
     SessionService._applyPhase(session, phaseSnapshot.phase)
+
+    if self._onSessionReady ~= nil then
+        local readyOk, readyResult = pcall(self._onSessionReady, player)
+        if not readyOk or readyResult == false then
+            self._baseService:release(player)
+            self._sessions[userId] = nil
+            setAttribute(player, "OddlingsBaseId", nil)
+            setAttribute(player, "OddlingsRaidPhase", nil)
+            if self._onSessionEnded ~= nil then
+                pcall(self._onSessionEnded, player)
+            end
+            if self._saveProfile ~= nil then
+                pcall(self._saveProfile, player)
+            end
+            if self._onRejected ~= nil then
+                self._onRejected(player, "SessionInitializationFailed")
+            end
+            return false, "SessionInitializationFailed"
+        end
+    end
 
     if player.CharacterAdded ~= nil then
         table.insert(
@@ -290,6 +322,17 @@ function SessionService.onPlayerRemoving(self: any, player: any): boolean
 
     session.operational = false
     self._baseService:setOperational(player, false)
+    if self._onSessionEnded ~= nil then
+        pcall(self._onSessionEnded, player)
+    end
+    if self._saveProfile ~= nil then
+        local saveOk, saved, saveError = pcall(self._saveProfile, player)
+        if not saveOk or saved == false then
+            warn(
+                string.format("[Session] Profile unload deferred: %s", tostring(saveError or saved))
+            )
+        end
+    end
     disconnectAll(session.connections)
     self._baseService:release(player)
     self._sessions[userId] = nil

@@ -1,6 +1,6 @@
 # V1 persistent data model
 
-This is the planned server-owned player profile for V1. `schemaVersion` is `1`. It remains a specification until M2/M7 implement the profile loader and persistence boundary; no DataStore or profile-library integration exists yet. The profile is the minimum durable state needed to resume progression and resolve the Welcome first-Raid rule deterministically.
+This is the server-owned player profile for V1. `schemaVersion` is `1`. M2 implements profile defaults, strict version-1 validation, DataStore load/save, a metadata-backed session lease, autosave, leave save, and shutdown save. M7 adds sequential migrations, backup/quarantine recovery, and transaction journals. The profile is the minimum durable state needed to resume progression and resolve the Welcome first-Raid rule deterministically.
 
 ## Profile schema
 
@@ -56,9 +56,9 @@ Only the durable first-Raid participation marker crosses a disconnect because it
 
 ## Ownership and save lifecycle
 
-`PlayerDataService` is the only gameplay-facing owner of a loaded profile. A server-only `ProfileStore` adapter acquires a per-user session lock, loads, validates, migrates, and saves serialized data. Domain services request validated mutations through PlayerDataService; clients never submit a profile or authoritative field values.
+`PlayerDataService` is the only gameplay-facing owner of a loaded profile. A server-only `ProfileStore` adapter atomically acquires a per-user lease in DataStore key metadata, validates and saves the schema-v1 record, renews the lease during checkpoints, and releases it after the final save. The record itself contains only the fields listed in the profile schema. M2 retries failed DataStore operations up to three times with bounded backoff; unknown schema versions and malformed profiles fail closed without being replaced by defaults. M7 adds migrations and verified backup/quarantine recovery. Domain services request validated mutations through PlayerDataService; clients never submit a profile or authoritative field values.
 
-Use bounded retry/backoff for transient load/save failures. Mark committed changes dirty, checkpoint during the session, save on player removal, and attempt bounded saves during shutdown. Do not acknowledge a durable transaction as saved until the store confirms it. On duplicate-session lock failure, do not allow two servers to mutate the same profile. Failed or interrupted transfer writes must reconcile from an idempotent journal to exactly one owner.
+M2 checkpoints profiles every 120 seconds with a 300-second session lease, saves and releases on player removal, and attempts parallel saves during shutdown. A save is successful only after `UpdateAsync` confirms it. On duplicate-session lease failure, the player is rejected before a base is assigned. Failed or interrupted transfer writes must reconcile from an idempotent journal to exactly one owner; transfer journals are added with the theft flow and hardened in M7.
 
 ## Explicit exclusions
 

@@ -35,6 +35,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Player-visible result:** Mossling visibly earns 40 Scrap/min; after the free tutorial in M4 it earns 50.
 - **Tests:** Default creation exactly once, online rate/fraction calculation, save/load baseline, no offline accrual, capped bounds and retry behavior.
 - **Acceptance:** Server alone creates starter ID/profile; base rate is exact; no offline earnings; rejoin restores committed Scrap and starter without duplication.
+- **Current evidence:** 24 portable Lune tests, strict profile validation, fake-DataStore lock/save/retry coverage, exact Mossling income, and Rojo build pass. Studio-backed DataStore API and live leaderboard checks remain pending because Studio is unavailable.
 - **Docs:** `DATA_MODEL.md`, `ECONOMY.md`, `TESTING.md`, `PROJECT_STATUS.md`.
 - **Commit boundary:** One profile-default/income commit; no unrelated persistence hardening.
 

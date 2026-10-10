@@ -18,7 +18,7 @@ The exact V1 profile is specified in [DATA_MODEL.md](DATA_MODEL.md). It includes
 
 For a player joining during RAID, keep the arrival-grace start/expiry timestamp in server-owned runtime state keyed by user and current Raid ID. Check it on both outgoing theft attempts and incoming target eligibility. Respawn, reset, or rejoin during that same Raid must reuse the original timestamp. This short join grace is not a persisted profile protection and never changes the shared Raid clock.
 
-The arrival-grace timestamp is runtime-only until it qualifies the player for first-Raid participation. The durable participation marker is profile state and survives disconnects. The Raid service owns the phase clock and completion boundary; the PlayerData service applies the persisted marker and lazily finalizes an elapsed completion timestamp during profile load. See [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md) for the planned request envelope and server checks. No gameplay remotes or persistence behavior are added in this readiness phase.
+The arrival-grace timestamp is runtime-only until it qualifies the player for first-Raid participation. The durable participation marker is profile state and survives disconnects. The Raid service owns the phase clock and completion boundary; PlayerDataService finalizes an elapsed completion timestamp before exposing a loaded profile. M2 implements the profile store and lock boundary; M7 adds migration, backup/quarantine, and transaction-journal hardening. See [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md) for the planned request envelope and server checks. Gameplay remotes are still pending their listed milestones.
 
 ## Purchases
 
