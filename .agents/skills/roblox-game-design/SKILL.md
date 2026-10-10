@@ -5,4 +5,4 @@ description: Draft or evaluate game-loop, feature, retention, or player-experien
 
 # Roblox game design
 
-Read [the approved concept](../../../docs/GAME_DESIGN.md). This repository is still in foundation phase: the only approved concept is a small multiplayer creature mutation game with short raid periods. **FULL GAME DESIGN WILL BE LOCKED IN A LATER PHASE.** Do not invent systems, progression, characters, or content unless the user explicitly moves the project into that phase.
+Read [the locked game design](../../../docs/GAME_DESIGN.md) and the relevant linked documents, especially [the MVP scope](../../../docs/MVP.md). The V1 design is now locked. Use this skill to evaluate or explicitly revise game-loop, feature, retention, or player-experience decisions. Keep recommendations inside the approved scope unless the user asks to reconsider it. A locked design does not authorize gameplay implementation; implementation requires a separate explicit request.

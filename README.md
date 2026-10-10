@@ -1,6 +1,6 @@
 # Roblox game foundation
 
-This repository is the source of truth for a small multiplayer creature mutation game. It contains the development foundation and a technical request-validation smoke path; it does not contain the full game design or gameplay systems.
+This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The development foundation and locked MVP design are documented here. The game design is complete for planning, but gameplay systems have not been implemented.
 
 ## Prerequisites
 
@@ -36,7 +36,7 @@ In Studio, open a baseplate or place, install the official Rojo 7 plugin from th
 - `src/server`: server bootstrap, services, security, and future persistence boundaries.
 - `src/client`: client bootstrap and presentation-only code.
 - `tests`: portable unit/integration/security tests and Studio multiplayer test plans.
-- `docs`: design placeholder, architecture, security, economy, analytics, monetization, tooling, testing, and status.
+- `docs`: locked game design, creature roster, mutations, raids, economy, monetization, player flow, MVP milestones, architecture, security, analytics, tooling, testing, and status.
 - `DevPackages`: Wally-generated development packages; ignored by Git and mapped to `ServerStorage`.
 - `build`: generated place files; ignored by Git.
 
@@ -50,3 +50,5 @@ In Studio, open a baseplate or place, install the official Rojo 7 plugin from th
 - Studio is not installed: local formatting, lint, portable tests, and place builds still work; Studio-only multiplayer execution remains unavailable until Studio is installed and signed in.
 
 Read [AGENTS.md](AGENTS.md) and [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) before making project changes.
+
+The locked V1 design starts at [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md). Design does not authorize implementation; gameplay work should begin only when requested.

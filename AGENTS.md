@@ -1,6 +1,6 @@
 # Agent operating rules
 
-Before changing files, read this document and the relevant material in `docs/`. Inspect the current branch, worktree status, tool versions, scripts, and nearby code first.
+Before changing files, read this document and relevant material in `docs/`. Inspect the current branch, worktree status, and nearby files first. Check tool versions and scripts for code, build, or tooling tasks.
 
 When a task matches a project skill under `.agents/skills/`, read that skill as well as its linked domain documentation.
 
@@ -12,9 +12,9 @@ When a task matches a project skill under `.agents/skills/`, read that skill as 
 4. Keep network declarations centralized in `src/shared/network`; do not create remotes ad hoc in gameplay modules.
 5. Put presentation in client code and decisions or ownership in server code.
 6. Add or update meaningful tests for behavior changes. Never delete or weaken tests to make a check pass.
-7. Run formatting, lint, tests, and the Rojo build using `./scripts/verify.ps1`; fix failures and rerun it.
+7. For code or runtime changes, run formatting, lint, tests, and the Rojo build using `./scripts/verify.ps1`; fix failures and rerun it. For documentation-only changes, review cross-document consistency and references without running gameplay tests.
 8. Update documentation and `docs/PROJECT_STATUS.md` when reality changes.
-9. Report validation results and any Studio/account-dependent blocker accurately.
+9. Report applicable review/validation results and any Studio/account-dependent blocker accurately.
 
 ## Do not
 
@@ -26,4 +26,4 @@ When a task matches a project skill under `.agents/skills/`, read that skill as 
 
 ## Scope guard
 
-This is a development foundation. The approved high-level concept is in `docs/GAME_DESIGN.md`; **FULL GAME DESIGN WILL BE LOCKED IN A LATER PHASE.** Do not expand the concept during foundation work.
+The approved V1 design is locked in `docs/GAME_DESIGN.md` and its linked planning documents. Do not add systems outside that scope without an explicit design request. The design lock does not authorize gameplay implementation; implement gameplay only when the user explicitly requests that work. Preserve the documented server authority and architecture when implementation is authorized.
