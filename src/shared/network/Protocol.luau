@@ -12,6 +12,8 @@ export type DevPingResponse = {
 }
 
 local Protocol = {}
+local MUTATION_THEMES = { Ember = true, Prism = true, Moss = true }
+local MUTATION_CHOICES = { KeepCurrent = true, Replace = true, Decline = true }
 
 Protocol.RemoteNames = table.freeze({
     DevPing = "DevPing",
@@ -47,6 +49,27 @@ local function isValidPayload(action: string, payload: any): boolean
     elseif action == "PurchaseSlot" then
         return hasExactKeys(payload, { targetCapacity = true })
             and (payload.targetCapacity == 3 or payload.targetCapacity == 4)
+    elseif action == "PurchaseCatalyst" then
+        return hasExactKeys(payload, { themeId = true })
+            and MUTATION_THEMES[payload.themeId] == true
+    elseif action == "CompleteTutorialMutation" then
+        return hasExactKeys(payload, { creatureId = true, themeId = true })
+            and type(payload.creatureId) == "string"
+            and #payload.creatureId > 0
+            and #payload.creatureId <= 128
+            and MUTATION_THEMES[payload.themeId] == true
+    elseif action == "StartMutation" then
+        return hasExactKeys(payload, { creatureId = true, themeId = true })
+            and type(payload.creatureId) == "string"
+            and #payload.creatureId > 0
+            and #payload.creatureId <= 128
+            and MUTATION_THEMES[payload.themeId] == true
+    elseif action == "ResolveMutation" then
+        return hasExactKeys(payload, { transactionId = true, choice = true })
+            and type(payload.transactionId) == "string"
+            and #payload.transactionId > 0
+            and #payload.transactionId <= 128
+            and MUTATION_CHOICES[payload.choice] == true
     elseif action == "GetSnapshot" then
         return hasExactKeys(payload, {})
     end

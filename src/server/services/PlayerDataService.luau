@@ -254,6 +254,14 @@ function PlayerDataService.validateProfile(profile: any): (boolean, string?)
     if not validateSet(profile.discoveredMutationFormIds, MutationDefinitions.isFormId, 24) then
         return false, "InvalidDiscoveredMutationForms"
     end
+    for _, creature in profile.creatures do
+        if
+            creature.mutationFormId ~= nil
+            and profile.discoveredMutationFormIds[creature.mutationFormId] ~= true
+        then
+            return false, "EquippedMutationNotDiscovered"
+        end
+    end
 
     if type(profile.tutorialCompleted) ~= "boolean" then
         return false, "InvalidTutorialState"

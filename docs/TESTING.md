@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults and fake DataStore behavior, online income, M3 capsule odds/pity/capacity, creature protection and stand projection, sale/slot costs, action replay/body conflicts, rate limits, and disconnect-safe response delivery. The latest M3 run passed 37 tests; Lune does not simulate Roblox Studio or multiplayer.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults and fake DataStore behavior, online income, M3 capsule odds/pity/capacity, and M4 mutation catalogs, catalyst/tutorial transactions, odds/pity, choices, locks, phase cleanup, profile/Codex validation, and action replay. The latest M4 run passed 48 tests; Lune does not simulate Roblox Studio or multiplayer.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -39,7 +39,7 @@ This engine-backed command was not run during bootstrap because Roblox Studio is
 
 ## Future implementation test matrix
 
-These are required cases for the listed milestones. M1 and M2 portable coverage is in place; M3 now covers the portable capsule, capacity, sale, protection, stand-projection, and network-action cases. M4–M12 coverage remains to be added alongside implementation. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
+These are required cases for the listed milestones. M1–M4 portable coverage is in place for their implemented scope; M5–M12 coverage remains to be added alongside implementation. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
 
 | Area | Cases and expected result | Test layer / milestone |
 | --- | --- | --- |

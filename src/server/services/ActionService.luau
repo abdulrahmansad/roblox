@@ -11,11 +11,23 @@ local ActionService = {}
 ActionService.__index = ActionService
 
 local ECONOMY_PHASES = { PEACE = true, WARNING = true, COOLDOWN = true }
-local MUTATING_ACTIONS = { PurchaseCapsule = true, SellCreature = true, PurchaseSlot = true }
+local MUTATING_ACTIONS = {
+    PurchaseCapsule = true,
+    SellCreature = true,
+    PurchaseSlot = true,
+    PurchaseCatalyst = true,
+    CompleteTutorialMutation = true,
+    StartMutation = true,
+    ResolveMutation = true,
+}
 local ACTION_RATE = {
     PurchaseCapsule = { capacity = 2, refillPerSecond = 2 },
     SellCreature = { capacity = 2, refillPerSecond = 2 },
     PurchaseSlot = { capacity = 2, refillPerSecond = 2 },
+    PurchaseCatalyst = { capacity = 2, refillPerSecond = 2 },
+    CompleteTutorialMutation = { capacity = 1, refillPerSecond = 1 },
+    StartMutation = { capacity = 1, refillPerSecond = 1 / 3 },
+    ResolveMutation = { capacity = 2, refillPerSecond = 2 },
     GetSnapshot = { capacity = 1, refillPerSecond = 0.5 },
 }
 local MAX_CACHED_REQUESTS = 2_048
@@ -111,6 +123,7 @@ function ActionService.new(options: any)
     assert(type(options.playerDataService) == "table", "playerDataService is required")
     assert(type(options.economyService) == "table", "economyService is required")
     assert(type(options.capsuleService) == "table", "capsuleService is required")
+    assert(type(options.mutationService) == "table", "mutationService is required")
     assert(type(options.baseService) == "table", "baseService is required")
     assert(
         type(options.baseService.isOperational) == "function",
@@ -132,11 +145,13 @@ function ActionService.new(options: any)
         _playerDataService = options.playerDataService,
         _economyService = options.economyService,
         _capsuleService = options.capsuleService,
+        _mutationService = options.mutationService,
         _baseService = options.baseService,
         _requestEvent = options.requestEvent,
         _resultEvent = options.resultEvent,
         _domainEvent = options.domainEvent,
         _kioskPart = options.kioskPart,
+        _mutationStationPart = options.mutationStationPart,
         _clock = options.clock or os.clock,
         _unixClock = options.unixClock or os.time,
         _canInteract = options.canInteract,
@@ -234,11 +249,19 @@ function ActionService._isOperational(self: any, player: any): boolean
     return self._baseService ~= nil and self._baseService:isOperational(player)
 end
 
-function ActionService._isNearKiosk(self: any, player: any): boolean
+function ActionService._isNearStation(self: any, player: any, action: string): boolean
+    local stationName = if action == "StartMutation"
+            or action == "ResolveMutation"
+            or action == "CompleteTutorialMutation"
+        then "mutation"
+        else "commons"
+    local stationPart = if stationName == "mutation"
+        then self._mutationStationPart
+        else self._kioskPart
     if self._canInteract ~= nil then
-        return self._canInteract(player) == true
+        return self._canInteract(player, stationName) == true
     end
-    return defaultCanInteract(player, self._kioskPart, self._kioskRange)
+    return defaultCanInteract(player, stationPart, self._kioskRange)
 end
 
 function ActionService._isTransportLimited(self: any, userId: number): boolean
@@ -304,6 +327,8 @@ function ActionService._dispatch(
                     standardCapsule = profile.standardCapsulePity,
                     mutationRareMissCount = profile.mutationRareMissCount,
                 },
+                mutationOdds = self._mutationService:getOddsSnapshot(profile.mutationRareMissCount),
+                pendingMutation = self._mutationService:getPending(session.userId),
                 codex = {
                     speciesIds = profile.discoveredSpeciesIds,
                     mutationFormIds = profile.discoveredMutationFormIds,
@@ -317,7 +342,7 @@ function ActionService._dispatch(
     if not self:_isOperational(player) then
         return false, nil, "Unavailable"
     end
-    if not self:_isNearKiosk(player) then
+    if not self:_isNearStation(player, request.action) then
         return false, nil, "OutOfRange"
     end
 
@@ -330,6 +355,30 @@ function ActionService._dispatch(
     elseif request.action == "PurchaseSlot" then
         data, errorCode =
             self._economyService:purchaseSlot(session.userId, request.payload.targetCapacity, phase)
+    elseif request.action == "PurchaseCatalyst" then
+        data, errorCode =
+            self._economyService:purchaseCatalyst(session.userId, request.payload.themeId, phase)
+    elseif request.action == "CompleteTutorialMutation" then
+        data, errorCode = self._mutationService:completeTutorialMutation(
+            session.userId,
+            request.payload.creatureId,
+            request.payload.themeId,
+            phase
+        )
+    elseif request.action == "StartMutation" then
+        data, errorCode = self._mutationService:startMutation(
+            session.userId,
+            request.payload.creatureId,
+            request.payload.themeId,
+            phase
+        )
+    elseif request.action == "ResolveMutation" then
+        data, errorCode = self._mutationService:resolveMutation(
+            session.userId,
+            request.payload.transactionId,
+            request.payload.choice,
+            phase
+        )
     else
         return false, nil, "InvalidRequest"
     end
@@ -382,7 +431,16 @@ function ActionService.handle(self: any, player: any, request: any): any?
     if errorCode ~= nil and STABLE_ERROR_CODES[errorCode] ~= true then
         errorCode = "Unavailable"
     end
-    if ok and request.action == "PurchaseCapsule" then
+    if
+        ok
+        and (
+            request.action == "PurchaseCapsule"
+            or request.action == "PurchaseCatalyst"
+            or request.action == "StartMutation"
+            or request.action == "CompleteTutorialMutation"
+            or (request.action == "ResolveMutation" and data.outcome == "Replaced")
+        )
+    then
         pcall(function()
             self._economyService:refreshPlayer(session.userId)
         end)
@@ -413,6 +471,57 @@ function ActionService.handle(self: any, player: any, request: any): any?
                     revision or 0
                 )
                 self:_emit(player, "ScrapChanged", { scrap = data.scrapBalance }, revision or 0)
+            elseif request.action == "PurchaseCatalyst" then
+                self:_emit(
+                    player,
+                    "CatalystChanged",
+                    { themeId = data.themeId, count = data.count },
+                    revision or 0
+                )
+                self:_emit(player, "ScrapChanged", { scrap = data.scrapBalance }, revision or 0)
+            elseif request.action == "CompleteTutorialMutation" then
+                self:_emit(
+                    player,
+                    "MutationApplied",
+                    { creatureId = data.creatureId, formId = data.formId, outcome = "Tutorial" },
+                    revision or 0
+                )
+                self:_emit(
+                    player,
+                    "TutorialCompleted",
+                    { themeId = data.themeId, formId = data.formId },
+                    revision or 0
+                )
+                self:_emit(player, "CodexChanged", { mutationFormId = data.formId }, revision or 0)
+            elseif request.action == "StartMutation" then
+                self:_emit(player, "MutationRevealed", {
+                    transactionId = data.transactionId,
+                    revealedFormId = data.revealedFormId,
+                    tier = data.tier,
+                    oddsSnapshot = data.oddsSnapshot,
+                }, revision or 0)
+                self:_emit(
+                    player,
+                    "CatalystChanged",
+                    { themeId = data.themeId, count = data.catalystCount },
+                    revision or 0
+                )
+                self:_emit(player, "ScrapChanged", { scrap = data.scrapBalance }, revision or 0)
+            elseif request.action == "ResolveMutation" and data.outcome == "Replaced" then
+                self:_emit(
+                    player,
+                    "MutationApplied",
+                    { activeFormId = data.activeFormId, outcome = data.outcome },
+                    revision or 0
+                )
+                if data.codexFormAdded then
+                    self:_emit(
+                        player,
+                        "CodexChanged",
+                        { mutationFormId = data.activeFormId },
+                        revision or 0
+                    )
+                end
             end
         end)
     end

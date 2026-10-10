@@ -9,9 +9,11 @@ local PlayerDataService = require("../src/server/services/PlayerDataService")
 local EconomyService = require("../src/server/services/EconomyService")
 local CreatureService = require("../src/server/services/CreatureService")
 local CapsuleService = require("../src/server/services/CapsuleService")
+local MutationService = require("../src/server/services/MutationService")
 local ActionService = require("../src/server/services/ActionService")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
+local MutationDefinitions = require("../src/shared/definitions/MutationDefinitions")
 
 local passed = 0
 local failed = 0
@@ -25,6 +27,13 @@ local function test(name: string, callback: () -> ())
         failed += 1
         warn("FAIL " .. name .. ": " .. tostring(result))
     end
+end
+
+local function expect(condition: any, message: string?)
+    if not condition then
+        error(message or "expectation failed", 2)
+    end
+    return condition
 end
 
 local function cloneTable(value: any): any
@@ -115,6 +124,60 @@ local function makeLoadedDataService(userId: number, idPrefix: string?)
     })
     assert(dataService:load(userId), "test profile should load")
     return dataService, dataStore
+end
+
+local function makeMutationContext(
+    userId: number,
+    randomInteger: ((number, number) -> number)?,
+    emitEvent: ((number, string, any, number) -> ())?
+)
+    local dataService = makeLoadedDataService(userId, "mutation-" .. tostring(userId) .. "-")
+    local baseService = BaseService.new({ baseCount = 1 })
+    local player = { UserId = userId }
+    assert(baseService:assign(player), "mutation test player should receive a base")
+    local creatureService = CreatureService.new({
+        playerDataService = dataService,
+        baseService = baseService,
+    })
+    assert(creatureService:syncPlayer(userId), "starter should project to its stand")
+    local nextTransaction = 0
+    local mutationService = MutationService.new({
+        playerDataService = dataService,
+        creatureService = creatureService,
+        generateTransactionId = function()
+            nextTransaction += 1
+            return "mutation-transaction-" .. tostring(nextTransaction)
+        end,
+        randomInteger = randomInteger,
+        emitEvent = emitEvent,
+    })
+    local economyService = EconomyService.new({
+        playerDataService = dataService,
+        creatureService = creatureService,
+        schedule = function() end,
+        wait = function() end,
+        publish = function() end,
+    })
+    return {
+        dataService = dataService,
+        baseService = baseService,
+        player = player,
+        creatureService = creatureService,
+        mutationService = mutationService,
+        economyService = economyService,
+    }
+end
+
+local function completeMutationTutorial(context: any, themeId: string): any
+    local profile = context.dataService:getSnapshot(context.player.UserId)
+    local result, errorCode = context.mutationService:completeTutorialMutation(
+        context.player.UserId,
+        profile.starterCreatureId,
+        themeId,
+        "PEACE"
+    )
+    assert(result ~= nil and errorCode == nil, "tutorial mutation should complete")
+    return result
 end
 
 test("shared protocol accepts a well-formed request", function()
@@ -1427,6 +1490,640 @@ test(
     end
 )
 
+test("mutation catalog contains the approved 24 forms, themes, tiers, and multipliers", function()
+    local expected = {
+        Ember = { Common = 4, Uncommon = 2, Rare = 1, Mythic = 1 },
+        Prism = { Common = 4, Uncommon = 2, Rare = 1, Mythic = 1 },
+        Moss = { Common = 4, Uncommon = 2, Rare = 1, Mythic = 1 },
+    }
+    local total = 0
+    for themeId, tierCounts in expected do
+        local themeForms = MutationDefinitions.FormIdsByThemeAndTier[themeId]
+        expect(themeForms ~= nil, "each approved theme should have a form catalog")
+        for tier, count in tierCounts do
+            expect(#themeForms[tier] == count, "theme tier count should match the design")
+            for _, formId in themeForms[tier] do
+                local form = MutationDefinitions[formId]
+                expect(form.themeId == themeId, "catalog form must match its theme")
+                expect(form.tier == tier, "catalog form must match its tier")
+                expect(
+                    form.multiplier
+                        == ({ Common = 1.25, Uncommon = 1.5, Rare = 2, Mythic = 4 })[tier],
+                    "catalog form multiplier should match its tier"
+                )
+                total += 1
+            end
+        end
+    end
+    expect(total == 24, "the V1 catalog should contain exactly 24 forms")
+    expect(MutationDefinitions.VerdantCrown.displayName == "Verdant Crown")
+end)
+
+test("profile validation requires every equipped mutation to be in the Codex", function()
+    local profile = PlayerDataService.createDefaultProfile(function()
+        return "profile-mutation-starter"
+    end)
+    profile.creatures[1].mutationFormId = "Cinder"
+    local invalid, invalidError = PlayerDataService.validateProfile(profile)
+    expect(not invalid and invalidError == "EquippedMutationNotDiscovered")
+
+    profile.discoveredMutationFormIds.Cinder = true
+    local valid, validError = PlayerDataService.validateProfile(profile)
+    expect(valid and validError == nil)
+end)
+
+test("catalyst purchases bind theme, cost exactly 60 Scrap, and reject invalid states", function()
+    local context = makeMutationContext(901, nil)
+    local userId = context.player.UserId
+    expect(context.dataService:creditScrap(userId, 60), "test player should afford a catalyst")
+
+    local purchase, purchaseError =
+        context.economyService:purchaseCatalyst(userId, "Prism", "PEACE")
+    expect(purchase ~= nil and purchaseError == nil, "Prism catalyst should be purchasable")
+    expect(purchase.themeId == "Prism" and purchase.count == 1)
+    local profile = context.dataService:getSnapshot(userId)
+    expect(profile.catalysts.prismDust == 1, "Prism must grant only its bound catalyst")
+    expect(profile.catalysts.emberSeed == 0 and profile.catalysts.mossSpore == 0)
+    expect(profile.scrap == 50, "catalyst purchase should cost exactly 60")
+
+    local unavailable, fundsError =
+        context.economyService:purchaseCatalyst(userId, "Ember", "PEACE")
+    expect(unavailable == nil and fundsError == "InsufficientScrap")
+    local invalid, invalidError =
+        context.economyService:purchaseCatalyst(userId, "Starlight", "PEACE")
+    expect(invalid == nil and invalidError == "InvalidRequest")
+    local wrongPhase, phaseError = context.economyService:purchaseCatalyst(userId, "Ember", "RAID")
+    expect(wrongPhase == nil and phaseError == "WrongPhase")
+    expect(context.dataService:getSnapshot(userId).scrap == 50)
+end)
+
+test("tutorial mutation is one-time, free, theme-bound, and selects every Common form", function()
+    local themes = { "Ember", "Prism", "Moss" }
+    local userId = 910
+    for _, themeId in themes do
+        for index = 1, 4 do
+            local chosenIndex = index
+            local context = makeMutationContext(userId, function(_minimum, maximum)
+                return if maximum == 4 then chosenIndex else 1
+            end)
+            local result = completeMutationTutorial(context, themeId)
+            local expectedForm = MutationDefinitions.FormIdsByThemeAndTier[themeId].Common[index]
+            expect(result.formId == expectedForm, "tutorial should select from the chosen branch")
+            local form = MutationDefinitions[result.formId]
+            expect(form.themeId == themeId and form.tier == "Common")
+            local profile = context.dataService:getSnapshot(userId)
+            expect(profile.tutorialCompleted, "tutorial completion should persist")
+            expect(profile.creatures[1].mutationFormId == result.formId)
+            expect(
+                profile.discoveredMutationFormIds[result.formId],
+                "equipped tutorial form enters Codex"
+            )
+            expect(profile.scrap == 50, "tutorial must not charge Scrap")
+            expect(profile.catalysts.emberSeed == 0)
+            expect(profile.catalysts.prismDust == 0)
+            expect(profile.catalysts.mossSpore == 0)
+            expect(profile.mutationRareMissCount == 0, "tutorial does not affect mutation pity")
+            local repeated, repeatedError = context.mutationService:completeTutorialMutation(
+                userId,
+                profile.starterCreatureId,
+                themeId,
+                "PEACE"
+            )
+            expect(repeated == nil and repeatedError == "AlreadyClaimed")
+        end
+        userId += 1
+    end
+
+    local wrongTarget = makeMutationContext(920, function()
+        return 1
+    end)
+    local rejected, targetError = wrongTarget.mutationService:completeTutorialMutation(
+        920,
+        "not-the-starter",
+        "Ember",
+        "PEACE"
+    )
+    expect(rejected == nil and targetError == "Locked", "tutorial must target the exact starter ID")
+end)
+
+test(
+    "normal mutation odds use exact tier boundaries and keep Mythic at one per thousand",
+    function()
+        local cases = {
+            { 600, "Common" },
+            { 601, "Uncommon" },
+            { 900, "Uncommon" },
+            { 901, "Rare" },
+            { 999, "Rare" },
+            { 1_000, "Mythic" },
+        }
+        for index, case in cases do
+            local calls = 0
+            local context = makeMutationContext(930 + index, function(minimum, _maximum)
+                calls += 1
+                if calls == 1 then
+                    return 1
+                elseif calls == 2 then
+                    return case[1]
+                end
+                return minimum
+            end)
+            local userId = context.player.UserId
+            expect(context.dataService:creditScrap(userId, 1_000))
+            completeMutationTutorial(context, "Ember")
+            expect(context.dataService:transact(userId, function(profile)
+                profile.catalysts.emberSeed = 1
+                return true, nil
+            end))
+            local profile = context.dataService:getSnapshot(userId)
+            local result, errorCode = context.mutationService:startMutation(
+                userId,
+                profile.starterCreatureId,
+                "Ember",
+                "PEACE"
+            )
+            expect(result ~= nil and errorCode == nil)
+            expect(result.tier == case[2], "normal roll should match exact thousand-roll bucket")
+            expect(result.oddsSnapshot.unit == "per-thousand")
+            expect(result.oddsSnapshot.normal.mythic == 1)
+            expect(not result.oddsSnapshot.rareGuaranteeActive)
+            expect(result.oddsSnapshot.nextRoll.mythic == 1)
+            expect(MutationDefinitions[result.revealedFormId].themeId == "Ember")
+        end
+    end
+)
+
+test("eight sub-Rare mutation misses activate 999-to-1 pity without Mythic pity", function()
+    local normalRollCount = 0
+    local forcedRoll = nil
+    local context = makeMutationContext(940, function(minimum, maximum)
+        if maximum == 1_000 then
+            normalRollCount += 1
+            if normalRollCount <= 8 then
+                return 600
+            end
+            return forcedRoll or 2
+        end
+        return minimum
+    end)
+    local userId = context.player.UserId
+    expect(context.dataService:creditScrap(userId, 5_000))
+    completeMutationTutorial(context, "Ember")
+    expect(context.dataService:transact(userId, function(profile)
+        profile.catalysts.emberSeed = 9
+        return true, nil
+    end))
+
+    for _ = 1, 8 do
+        local profile = context.dataService:getSnapshot(userId)
+        local result = context.mutationService:startMutation(
+            userId,
+            profile.starterCreatureId,
+            "Ember",
+            "PEACE"
+        )
+        expect(result ~= nil and result.tier == "Common")
+        expect(
+            context.mutationService:resolveMutation(
+                userId,
+                result.transactionId,
+                "Decline",
+                "PEACE"
+            )
+        )
+    end
+    local profile = context.dataService:getSnapshot(userId)
+    expect(profile.mutationRareMissCount == 8)
+    expect(profile.mythicMissCount == nil, "profile has no Mythic miss counter")
+
+    forcedRoll = 2
+    local guaranteedRare =
+        context.mutationService:startMutation(userId, profile.starterCreatureId, "Ember", "PEACE")
+    expect(guaranteedRare.tier == "Rare")
+    expect(guaranteedRare.oddsSnapshot.rareGuaranteeActive)
+    expect(guaranteedRare.oddsSnapshot.nextRoll.rare == 999)
+    expect(guaranteedRare.oddsSnapshot.nextRoll.mythic == 1)
+    expect(context.dataService:getSnapshot(userId).mutationRareMissCount == 0)
+
+    local mythicContext = makeMutationContext(941, function(_minimum, maximum)
+        return if maximum == 1_000 then 1 else 1
+    end)
+    expect(mythicContext.dataService:creditScrap(941, 1_000))
+    completeMutationTutorial(mythicContext, "Prism")
+    expect(mythicContext.dataService:transact(941, function(draft)
+        draft.catalysts.prismDust = 1
+        draft.mutationRareMissCount = 8
+        return true, nil
+    end))
+    local mythicProfile = mythicContext.dataService:getSnapshot(941)
+    local guaranteedMythic = mythicContext.mutationService:startMutation(
+        941,
+        mythicProfile.starterCreatureId,
+        "Prism",
+        "PEACE"
+    )
+    expect(guaranteedMythic.tier == "Mythic", "pity-active roll one still has its 0.1% Mythic")
+    expect(guaranteedMythic.oddsSnapshot.nextRoll.mythic == 1)
+    expect(mythicContext.dataService:getSnapshot(941).mutationRareMissCount == 0)
+
+    local longRun = makeMutationContext(942, function(minimum, maximum)
+        return if maximum == 1_000 then 600 else minimum
+    end)
+    expect(longRun.dataService:creditScrap(942, 5_000))
+    completeMutationTutorial(longRun, "Moss")
+    expect(longRun.dataService:transact(942, function(draft)
+        draft.catalysts.mossSpore = 25
+        return true, nil
+    end))
+    for _ = 1, 25 do
+        local rollProfile = longRun.dataService:getSnapshot(942)
+        local result = longRun.mutationService:startMutation(
+            942,
+            rollProfile.starterCreatureId,
+            "Moss",
+            "PEACE"
+        )
+        expect(result.tier ~= "Mythic", "this deterministic 25-roll sequence has no Mythic")
+        expect(
+            longRun.mutationService:resolveMutation(942, result.transactionId, "Decline", "PEACE")
+        )
+    end
+    local finalProfile = longRun.dataService:getSnapshot(942)
+    local finalOdds = longRun.mutationService:getOddsSnapshot(finalProfile.mutationRareMissCount)
+    expect(finalProfile.mythicMissCount == nil, "Mythic misses do not persist a pity counter")
+    expect(finalOdds.normal.mythic == 1 and finalOdds.nextRoll.mythic == 1)
+end)
+
+test(
+    "mutation choices preserve, equip, or decline forms without refunds or premature Codex entries",
+    function()
+        local current = nil
+        local queued = {
+            { tier = 601, form = 1 },
+            { tier = 601, form = 2 },
+            { tier = 601, form = 1 },
+        }
+        local context = makeMutationContext(950, function(minimum, maximum)
+            if maximum == 1_000 then
+                current = (current or 0) + 1
+                return queued[current].tier
+            elseif maximum == 2 then
+                return queued[current].form
+            end
+            return minimum
+        end)
+        local userId = context.player.UserId
+        expect(context.dataService:creditScrap(userId, 1_000))
+        completeMutationTutorial(context, "Ember")
+        expect(context.dataService:transact(userId, function(profile)
+            profile.catalysts.emberSeed = 3
+            return true, nil
+        end))
+        local profile = context.dataService:getSnapshot(userId)
+        local starterId = profile.starterCreatureId
+        local tutorialForm = profile.creatures[1].mutationFormId
+
+        local keepOffer = context.mutationService:startMutation(userId, starterId, "Ember", "PEACE")
+        expect(keepOffer.revealedFormId == "Flarefin")
+        expect(
+            context.mutationService:resolveMutation(
+                userId,
+                keepOffer.transactionId,
+                "KeepCurrent",
+                "PEACE"
+            )
+        )
+        profile = context.dataService:getSnapshot(userId)
+        expect(profile.creatures[1].mutationFormId == tutorialForm)
+        expect(not profile.discoveredMutationFormIds.Flarefin, "kept result must not enter Codex")
+
+        local replaceOffer =
+            context.mutationService:startMutation(userId, starterId, "Ember", "PEACE")
+        expect(replaceOffer.revealedFormId == "Hearthhorn")
+        local replaced, replaceError = context.mutationService:resolveMutation(
+            userId,
+            replaceOffer.transactionId,
+            "Replace",
+            "PEACE"
+        )
+        expect(replaced ~= nil and replaced.outcome == "Replaced" and replaced.codexFormAdded)
+        profile = context.dataService:getSnapshot(userId)
+        expect(profile.creatures[1].mutationFormId == "Hearthhorn")
+        expect(profile.discoveredMutationFormIds.Hearthhorn)
+
+        local declineOffer =
+            context.mutationService:startMutation(userId, starterId, "Ember", "PEACE")
+        expect(declineOffer.revealedFormId == "Flarefin")
+        local declined = context.mutationService:resolveMutation(
+            userId,
+            declineOffer.transactionId,
+            "Decline",
+            "PEACE"
+        )
+        expect(declined.outcome == "Declined")
+        profile = context.dataService:getSnapshot(userId)
+        expect(profile.creatures[1].mutationFormId == "Hearthhorn")
+        expect(not profile.discoveredMutationFormIds.Flarefin)
+        expect(profile.scrap == 750, "keep, replace, and decline each retain the 100 Scrap cost")
+        expect(profile.catalysts.emberSeed == 0)
+        expect(profile.mutationRareMissCount == 3)
+        expect(replaceError == nil)
+    end
+)
+
+test("duplicate mutation results keep the active form while preserving cost and pity", function()
+    local context = makeMutationContext(951, function(minimum, maximum)
+        if maximum == 1_000 then
+            return 1
+        end
+        return minimum
+    end)
+    local userId = context.player.UserId
+    expect(context.dataService:creditScrap(userId, 500))
+    local tutorial = completeMutationTutorial(context, "Ember")
+    expect(tutorial.formId == "Cinder")
+    expect(context.dataService:transact(userId, function(profile)
+        profile.catalysts.emberSeed = 1
+        return true, nil
+    end))
+    local profile = context.dataService:getSnapshot(userId)
+    local offer =
+        context.mutationService:startMutation(userId, profile.starterCreatureId, "Ember", "PEACE")
+    expect(offer.revealedFormId == "Cinder")
+    local result =
+        context.mutationService:resolveMutation(userId, offer.transactionId, "Replace", "PEACE")
+    expect(result.outcome == "Duplicate")
+    profile = context.dataService:getSnapshot(userId)
+    expect(profile.creatures[1].mutationFormId == "Cinder")
+    expect(profile.scrap == 450 and profile.catalysts.emberSeed == 0)
+    expect(profile.mutationRareMissCount == 1)
+    expect(profile.discoveredMutationFormIds.Cinder)
+end)
+
+test("pending mutation locks the creature and phase or disconnect clears only the offer", function()
+    local discardedEvents = {}
+    local context = makeMutationContext(952, function(minimum, maximum)
+        return if maximum == 1_000 then 1 else minimum
+    end, function(_userId, event, data)
+        table.insert(discardedEvents, { event = event, data = data })
+    end)
+    local userId = context.player.UserId
+    expect(context.dataService:creditScrap(userId, 500))
+    completeMutationTutorial(context, "Ember")
+    expect(context.dataService:transact(userId, function(profile)
+        table.insert(profile.creatures, { id = "mutation-extra", speciesId = "PebbleImp" })
+        profile.discoveredSpeciesIds.PebbleImp = true
+        return true, nil
+    end))
+    expect(context.creatureService:syncPlayer(userId))
+    expect(context.dataService:transact(userId, function(profile)
+        profile.catalysts.emberSeed = 2
+        return true, nil
+    end))
+    local creatureId = "mutation-extra"
+    expect(context.baseService:setCollection(userId, {}, 2))
+    local offStand, offStandError =
+        context.mutationService:startMutation(userId, creatureId, "Ember", "PEACE")
+    expect(
+        offStand == nil and offStandError == "Locked",
+        "creature must still be projected to a stand"
+    )
+    expect(context.creatureService:syncPlayer(userId))
+    expect(context.creatureService:reserve(userId, creatureId, "raid-attempt"))
+    local reserved, reservedError =
+        context.mutationService:startMutation(userId, creatureId, "Ember", "PEACE")
+    expect(reserved == nil and reservedError == "Locked", "reserved creature cannot mutate")
+    expect(context.creatureService:releaseReservation(userId, creatureId, "raid-attempt"))
+    local offer = context.mutationService:startMutation(userId, creatureId, "Ember", "PEACE")
+    expect(offer ~= nil)
+    local balanceAfterRoll = context.dataService:getSnapshot(userId).scrap
+    expect(context.creatureService:isRestricted(userId, creatureId))
+    expect(not context.creatureService:reserve(userId, creatureId, "raid-attempt"))
+    local sale, saleError = context.economyService:sellCreature(userId, creatureId, "PEACE")
+    expect(sale == nil and saleError == "Locked")
+    local duplicateStart, duplicateError =
+        context.mutationService:startMutation(userId, creatureId, "Ember", "PEACE")
+    expect(duplicateStart == nil and duplicateError == "Conflict")
+    expect(context.dataService:getSnapshot(userId).scrap == balanceAfterRoll)
+
+    expect(context.mutationService:onPhaseChanged({ phase = "RAID" }) == 1)
+    expect(context.mutationService:getPending(userId) == nil)
+    expect(not context.creatureService:isRestricted(userId, creatureId))
+    expect(discardedEvents[1].event == "MutationDiscarded")
+    expect(discardedEvents[1].data.transactionId == offer.transactionId)
+    local expired, expiredError =
+        context.mutationService:resolveMutation(userId, offer.transactionId, "Replace", "PEACE")
+    expect(expired == nil and expiredError == "Expired")
+    expect(context.dataService:getSnapshot(userId).scrap == balanceAfterRoll)
+
+    local secondOffer = context.mutationService:startMutation(userId, creatureId, "Ember", "PEACE")
+    expect(secondOffer ~= nil)
+    context.mutationService:clearUser(userId)
+    expect(context.mutationService:getPending(userId) == nil)
+    expect(not context.creatureService:isRestricted(userId, creatureId))
+end)
+
+test("mutation action protocol accepts only the approved payloads", function()
+    local function request(action, payload)
+        return {
+            sessionId = "session-mutation-123",
+            requestId = "mutation-action-1",
+            action = action,
+            payload = payload,
+        }
+    end
+    expect(Protocol.isValidActionRequest(request("PurchaseCatalyst", { themeId = "Moss" })))
+    expect(Protocol.isValidActionRequest(request("CompleteTutorialMutation", {
+        creatureId = "creature-id",
+        themeId = "Ember",
+    })))
+    expect(Protocol.isValidActionRequest(request("StartMutation", {
+        creatureId = "creature-id",
+        themeId = "Prism",
+    })))
+    expect(Protocol.isValidActionRequest(request("ResolveMutation", {
+        transactionId = "transaction-id",
+        choice = "Replace",
+    })))
+    expect(not Protocol.isValidActionRequest(request("PurchaseCatalyst", {
+        themeId = "Moss",
+        catalystId = "emberSeed",
+    })))
+    expect(not Protocol.isValidActionRequest(request("StartMutation", {
+        creatureId = "creature-id",
+        themeId = "Prism",
+        rarity = "Mythic",
+    })))
+    expect(not Protocol.isValidActionRequest(request("ResolveMutation", {
+        transactionId = "transaction-id",
+        choice = "GrantMythic",
+    })))
+end)
+
+test("ActionService routes mutation requests through station and transaction guards", function()
+    local userId = 953
+    local calls = 0
+    local context = makeMutationContext(userId, function(minimum, maximum)
+        calls += 1
+        if calls == 1 then
+            return 1
+        elseif maximum == 1_000 then
+            return 601
+        end
+        return minimum
+    end)
+    expect(context.dataService:creditScrap(userId, 1_000))
+    local profile = context.dataService:getSnapshot(userId)
+    local capsuleService = CapsuleService.new({
+        playerDataService = context.dataService,
+        creatureService = context.creatureService,
+        generateCreatureId = function()
+            return "unused-capsule"
+        end,
+        randomInteger = function()
+            return 1
+        end,
+    })
+    local player = {
+        UserId = userId,
+        sessionId = "mutation-session-953",
+        nearCommons = true,
+        nearMutation = true,
+    }
+    local now = 0
+    local phase = "PEACE"
+    local events = {}
+    local actionService = ActionService.new({
+        sessionService = {
+            getSession = function(_self, candidate)
+                if candidate == player then
+                    return { userId = userId, sessionId = player.sessionId }
+                end
+                return nil
+            end,
+        },
+        raidService = {
+            getSnapshot = function()
+                return { phase = phase }
+            end,
+        },
+        playerDataService = context.dataService,
+        economyService = context.economyService,
+        capsuleService = capsuleService,
+        mutationService = context.mutationService,
+        baseService = {
+            isOperational = function()
+                return true
+            end,
+        },
+        requestEvent = {},
+        resultEvent = {},
+        domainEvent = {
+            FireClient = function(_self, _player, event)
+                table.insert(events, event)
+            end,
+        },
+        clock = function()
+            return now
+        end,
+        canInteract = function(_candidate, station)
+            return if station == "mutation" then player.nearMutation else player.nearCommons
+        end,
+    })
+    local initialSnapshot = actionService:handle(player, {
+        sessionId = player.sessionId,
+        requestId = "mutation-initial-snapshot",
+        action = "GetSnapshot",
+        payload = {},
+    })
+    expect(initialSnapshot.ok)
+    expect(initialSnapshot.data.mutationOdds.normal.mythic == 1)
+    expect(initialSnapshot.data.mutationOdds.nextRoll.mythic == 1)
+    now = 2
+    local tutorialRequest = {
+        sessionId = player.sessionId,
+        requestId = "tutorial-mutation",
+        action = "CompleteTutorialMutation",
+        payload = { creatureId = profile.starterCreatureId, themeId = "Ember" },
+    }
+    local tutorial = actionService:handle(player, tutorialRequest)
+    expect(tutorial.ok and tutorial.data.tutorialCompleted)
+    expect(events[1].event == "MutationApplied")
+    expect(events[2].event == "TutorialCompleted")
+
+    local buy = actionService:handle(player, {
+        sessionId = player.sessionId,
+        requestId = "buy-catalyst",
+        action = "PurchaseCatalyst",
+        payload = { themeId = "Ember" },
+    })
+    expect(buy.ok and buy.data.count == 1 and buy.data.scrapBalance == 990)
+    expect(events[#events - 1].event == "CatalystChanged")
+    expect(events[#events].event == "ScrapChanged")
+
+    local startRequest = {
+        sessionId = player.sessionId,
+        requestId = "start-mutation",
+        action = "StartMutation",
+        payload = { creatureId = profile.starterCreatureId, themeId = "Ember" },
+    }
+    local start = actionService:handle(player, startRequest)
+    expect(start.ok and start.data.transactionId ~= nil)
+    local afterStart = context.dataService:getSnapshot(userId)
+    local replay = actionService:handle(player, startRequest)
+    expect(replay.ok and replay.data.transactionId == start.data.transactionId)
+    expect(context.dataService:getSnapshot(userId).scrap == afterStart.scrap)
+    expect(events[#events - 2].event == "MutationRevealed")
+    local pendingSnapshot = actionService:handle(player, {
+        sessionId = player.sessionId,
+        requestId = "mutation-pending-snapshot",
+        action = "GetSnapshot",
+        payload = {},
+    })
+    expect(
+        pendingSnapshot.ok
+            and pendingSnapshot.data.pendingMutation.transactionId == start.data.transactionId,
+        "snapshot should restore the server-owned transient reveal"
+    )
+
+    now = 4
+    local resolveRequest = {
+        sessionId = player.sessionId,
+        requestId = "resolve-mutation",
+        action = "ResolveMutation",
+        payload = { transactionId = start.data.transactionId, choice = "Replace" },
+    }
+    local resolved = actionService:handle(player, resolveRequest)
+    expect(resolved.ok and resolved.data.outcome == "Replaced")
+    expect(events[#events - 1].event == "MutationApplied")
+    expect(events[#events].event == "CodexChanged")
+    local eventCountAfterResolve = #events
+    local resolvedReplay = actionService:handle(player, resolveRequest)
+    expect(resolvedReplay.ok and resolvedReplay.data.outcome == "Replaced")
+    expect(#events == eventCountAfterResolve, "resolution replay cannot equip or publish twice")
+    expect(EconomyService.getIncomePerMinute(context.dataService:getSnapshot(userId)) > 50)
+
+    player.nearMutation = false
+    now = 8
+    local outOfRange = actionService:handle(player, {
+        sessionId = player.sessionId,
+        requestId = "mutation-out-of-range",
+        action = "StartMutation",
+        payload = { creatureId = profile.starterCreatureId, themeId = "Ember" },
+    })
+    expect(not outOfRange.ok and outOfRange.code == "OutOfRange")
+    phase = "RAID"
+    player.nearMutation = true
+    now = 12
+    local wrongPhase = actionService:handle(player, {
+        sessionId = player.sessionId,
+        requestId = "mutation-wrong-phase",
+        action = "StartMutation",
+        payload = { creatureId = profile.starterCreatureId, themeId = "Ember" },
+    })
+    expect(not wrongPhase.ok and wrongPhase.code == "WrongPhase")
+end)
+
 test(
     "ActionService checks session, phase, kiosk, and replays request IDs without duplicate effects",
     function()
@@ -1479,6 +2176,14 @@ test(
             playerDataService = dataService,
             economyService = economyService,
             capsuleService = capsuleService,
+            mutationService = {
+                getOddsSnapshot = function()
+                    return nil
+                end,
+                getPending = function()
+                    return nil
+                end,
+            },
             baseService = {
                 isOperational = function()
                     return true
@@ -1662,6 +2367,14 @@ test("ActionService contains a client response send error after disconnect", fun
         playerDataService = dataService,
         economyService = {},
         capsuleService = {},
+        mutationService = {
+            getOddsSnapshot = function()
+                return nil
+            end,
+            getPending = function()
+                return nil
+            end,
+        },
         baseService = {
             isOperational = function()
                 return true

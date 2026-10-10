@@ -59,6 +59,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Player-visible result:** Player chooses a tutorial theme and can reveal and equip a mutation.
 - **Tests:** Catalyst kiosk price/theme and transaction replay; mutation cost/catalyst; tutorial idempotency; each tier via deterministic RNG; 0.1% Mythic including pity-active odds; no Mythic counter; one pending transaction; form/Codex behavior; invalid phase/reserved creature; disconnect and phase-boundary choice.
 - **Acceptance:** Server chooses outcomes; 8 below-Rare rolls guarantee Rare-or-better next, Mythic remains 0.1%; old form remains until Replace; KeepCurrent/Decline do not refund; only equipped form is discovered.
+- **Current evidence:** `./scripts/verify.ps1` passes formatting, Selene with 0 warnings/errors, 48 Lune tests, and Rojo build. Deterministic coverage includes all 24 forms, every normal tier boundary, 8-miss pity and 999/1 odds, 0.1% Mythic under active pity and after 25 non-Mythic rolls, tutorial selection/idempotency, all three choices, duplicate results, equipped-form Codex validation, locks, station range, action replay, and phase/disconnect cleanup. Roblox Studio mutation-station presentation and in-world interaction checks remain pending because Studio is unavailable.
 - **Docs:** `MUTATIONS.md`, `DATA_MODEL.md`, `NETWORK_PROTOCOL.md`, `STATE_MACHINES.md`, `TESTING.md`.
 - **Commit boundary:** One mutation commit; no raid logic.
 

@@ -146,6 +146,14 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
     kiosk.Color = Color3.fromRGB(174, 133, 91)
     kiosk:SetAttribute("InteractionRangeStuds", 12)
 
+    local mutationStation = BaseService._ensurePart(folder, "MutationStation", "Part")
+    mutationStation.Anchored = true
+    mutationStation.Size = Vector3.new(8, 3, 8)
+    mutationStation.CFrame = CFrame.new(0, 1.5, 16)
+    mutationStation.Material = Enum.Material.Neon
+    mutationStation.Color = Color3.fromRGB(112, 151, 173)
+    mutationStation:SetAttribute("InteractionRangeStuds", EconomyConfig.KIOSK_RANGE_STUDS)
+
     for _, base in self._bases do
         local plot = folder:FindFirstChild(base.id)
         if plot == nil then
@@ -305,6 +313,17 @@ function BaseService.getForPlayer(self: any, player: any): any?
         return nil
     end
 
+    local index = self._userIdToBaseIndex[userId]
+    if index == nil then
+        return nil
+    end
+    return cloneBase(self._bases[index])
+end
+
+function BaseService.getForUserId(self: any, userId: number): any?
+    if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
+        return nil
+    end
     local index = self._userIdToBaseIndex[userId]
     if index == nil then
         return nil

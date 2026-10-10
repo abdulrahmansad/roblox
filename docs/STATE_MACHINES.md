@@ -42,6 +42,7 @@ IDLE → ROLLING → REVEALED → KEEP_CURRENT / REPLACE / DECLINE → IDLE
 ```
 
 - `StartMutation` is accepted only in PEACE, WARNING, or COOLDOWN for an owned, unreserved creature, with matching catalyst and 100 Scrap. Charge, server roll, and pity update are one transaction; server records one pending result.
+- The one-time free tutorial mutation must be completed before a normal mutation can start. It equips one uniformly selected Common form from the player's chosen theme to the exact starter ID without changing Scrap or pity.
 - `ROLLING` is the short reveal presentation. The result is already fixed server-side; skipping the animation changes no outcome.
 - `REVEALED` accepts one choice. `KEEP_CURRENT` and `DECLINE` both leave the old form equipped and do not refund; `REPLACE` equips the result. Only an equipped form is added to Codex.
 - A second mutation is forbidden until the first returns to `IDLE`. Replayed starts or choices cannot charge twice or replace twice.

@@ -1,10 +1,13 @@
 # Project status
 
-Status: V1 implementation is in progress at **M4 — Mutations**. M1–M3 are committed and pushed. M3's portable implementation and full local verification pass are complete; Studio checks remain pending. The V1 design remains frozen.
+Status: V1 implementation is in progress at **M4 — Mutations**. M1–M3 are committed and pushed. M4's portable implementation and full local verification pass are complete; its focused commit and push are being closed. Studio checks remain pending. The V1 design remains frozen.
 
 ## Current milestone: M4
 
-- M4 implementation is beginning from the approved mutation catalog, odds, tutorial, and choice contracts in [MUTATIONS.md](MUTATIONS.md), [DATA_MODEL.md](DATA_MODEL.md), [STATE_MACHINES.md](STATE_MACHINES.md), and [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md). No M4 runtime implementation has been committed yet.
+- Implemented the approved mutation catalog, 60-Scrap catalyst purchase, free chosen-theme tutorial Common, 100-Scrap normal roll, one shared Rare-or-better pity counter, and KeepCurrent/Replace/Decline choices.
+- Normal mutation results are server-selected and charged atomically with their catalyst and pity update. Pending results stay server-side, lock their creature, and clear on disconnect or entry to RAID/RESOLUTION without refunding the already-committed roll.
+- `GetSnapshot` includes normal odds and the exact next roll before confirmation; Mythic remains exactly 0.1%, including while rare pity is active.
+- `./scripts/verify.ps1` passes formatting, Selene (0 warnings/errors), 48 Lune tests, and the Rojo build. Studio mutation-station range/presentation checks remain pending because Roblox Studio is unavailable.
 - M3 remains portable-verified as summarized below; engine-backed Studio checks remain pending.
 
 ## M3 — Capsules, sales, and capacity
@@ -35,8 +38,8 @@ Roblox Studio is not detected in the inspected PATH, LocalAppData/Program Files 
 
 ## Remaining work
 
-M4–M12 remain: mutations, timed Raid state, theft/Tag/recovery, persistence hardening and transfer journals, mobile onboarding/UI, V1 map/content/audio, hostile playtest and balance, the approved cosmetic pass after gameplay gates, and release readiness. M0/M1/M2/M3 engine-backed checks, 6–8-player validation, mobile/device testing, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
+M5–M12 remain: timed Raid state, theft/Tag/recovery, persistence hardening and transfer journals, mobile onboarding/UI, V1 map/content/audio, hostile playtest and balance, the approved cosmetic pass after gameplay gates, and release readiness. M0–M4 engine-backed checks, 6–8-player validation, mobile/device testing, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. Local `HEAD` and `origin/main` match at `10a4f4846c79d89fbe13424abcaffb93f7f0e273`, the M3 milestone commit. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. The synchronized M3 code commit is `10a4f4846c79d89fbe13424abcaffb93f7f0e273`; `origin/main` is at the M4 kickoff documentation commit `dc446504775306610110fc35b93e894c1556f017`. M4 code/docs pass local verification and the focused milestone commit/push is in progress. Historical M3 backup copies remain in the local stashes.

@@ -51,6 +51,22 @@ function CreatureService.syncPlayer(self: any, userId: number): (boolean, string
     return true, nil
 end
 
+function CreatureService.isOnStand(self: any, userId: number, creatureId: string): boolean
+    if self._baseService == nil or type(creatureId) ~= "string" then
+        return false
+    end
+    local base = self._baseService:getForUserId(userId)
+    if base == nil or base.ownerUserId ~= userId then
+        return false
+    end
+    for _, creature in base.creatures do
+        if creature.id == creatureId then
+            return true
+        end
+    end
+    return false
+end
+
 function CreatureService.findInProfile(
     _self: any,
     profile: any,
@@ -175,16 +191,19 @@ function CreatureService.setMutationLock(
     if type(locked) ~= "boolean" then
         return false
     end
-    self._mutationLocks[userId] = self._mutationLocks[userId] or {}
     if locked then
         if self:isRestricted(userId, creatureId) then
             return false
         end
+        self._mutationLocks[userId] = self._mutationLocks[userId] or {}
         self._mutationLocks[userId][creatureId] = true
     else
-        self._mutationLocks[userId][creatureId] = nil
-        if next(self._mutationLocks[userId]) == nil then
-            self._mutationLocks[userId] = nil
+        local locks = self._mutationLocks[userId]
+        if locks ~= nil then
+            locks[creatureId] = nil
+            if next(locks) == nil then
+                self._mutationLocks[userId] = nil
+            end
         end
     end
     return true

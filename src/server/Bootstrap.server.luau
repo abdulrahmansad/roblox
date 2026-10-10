@@ -15,6 +15,7 @@ local PlayerDataService = require(ServerScriptService.Server.services.PlayerData
 local EconomyService = require(ServerScriptService.Server.services.EconomyService)
 local CreatureService = require(ServerScriptService.Server.services.CreatureService)
 local CapsuleService = require(ServerScriptService.Server.services.CapsuleService)
+local MutationService = require(ServerScriptService.Server.services.MutationService)
 local ActionService = require(ServerScriptService.Server.services.ActionService)
 local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
@@ -85,6 +86,27 @@ local actionResult = ensureRemoteEvent(Protocol.RemoteNames.ActionResult)
 local domainEvent = ensureRemoteEvent(Protocol.RemoteNames.DomainEvent)
 local blockout = Workspace:WaitForChild("OddlingsBlockout")
 local kioskPart = blockout:WaitForChild("CommonsKiosk")
+local mutationStationPart = blockout:WaitForChild("MutationStation")
+local mutationService = MutationService.new({
+    playerDataService = playerDataService,
+    creatureService = creatureService,
+    generateTransactionId = function()
+        return HttpService:GenerateGUID(false)
+    end,
+    emitEvent = function(userId, event, data, revision)
+        local player = Players:GetPlayerByUserId(userId)
+        if player ~= nil then
+            pcall(function()
+                domainEvent:FireClient(player, {
+                    event = event,
+                    revision = revision,
+                    serverTimeUnix = os.time(),
+                    data = data,
+                })
+            end)
+        end
+    end,
+})
 local actionService: any = nil
 local sessionService = SessionService.new({
     baseService = baseService,
@@ -113,6 +135,7 @@ local sessionService = SessionService.new({
     end,
     onSessionEnded = function(player)
         economyService:stopPlayer(player)
+        mutationService:clearUser(player.UserId)
         creatureService:cleanupUser(player.UserId)
         if actionService ~= nil then
             actionService:clearUser(player.UserId)
@@ -130,17 +153,23 @@ local sessionService = SessionService.new({
         end
     end,
 })
+raidService.Changed:Connect(function(snapshot)
+    sessionService:onPhaseChanged(snapshot)
+    mutationService:onPhaseChanged(snapshot)
+end)
 actionService = ActionService.new({
     sessionService = sessionService,
     raidService = raidService,
     playerDataService = playerDataService,
     economyService = economyService,
     capsuleService = capsuleService,
+    mutationService = mutationService,
     baseService = baseService,
     requestEvent = actionRequest,
     resultEvent = actionResult,
     domainEvent = domainEvent,
     kioskPart = kioskPart,
+    mutationStationPart = mutationStationPart,
 })
 assert(actionService:start(), "ActionService failed to start")
 assert(sessionService:start(Players), "SessionService failed to start")

@@ -9,6 +9,9 @@ local MutationDefinitions = if game ~= nil
 local EconomyConfig = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.config.EconomyConfig)
     else require("../../shared/config/EconomyConfig")
+local MutationConfig = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.config.MutationConfig)
+    else require("../../shared/config/MutationConfig")
 
 local EconomyService = {}
 EconomyService.__index = EconomyService
@@ -79,6 +82,43 @@ function EconomyService.new(options: any)
 end
 
 local ECONOMY_PHASES = { PEACE = true, WARNING = true, COOLDOWN = true }
+
+function EconomyService.purchaseCatalyst(
+    self: any,
+    userId: number,
+    themeId: string,
+    phase: string
+): (any?, string?)
+    if ECONOMY_PHASES[phase] ~= true then
+        return nil, "WrongPhase"
+    end
+    local catalystId = MutationConfig.CATALYSTS_BY_THEME[themeId]
+    if catalystId == nil then
+        return nil, "InvalidRequest"
+    end
+
+    local success, data, errorCode = self._playerDataService:transact(userId, function(profile)
+        if profile.scrap < MutationConfig.CATALYST_PRICE then
+            return nil, "InsufficientScrap"
+        end
+        if profile.catalysts[catalystId] >= MutationConfig.MAX_CATALYST_COUNT then
+            return nil, "Unavailable"
+        end
+        profile.scrap -= MutationConfig.CATALYST_PRICE
+        profile.catalysts[catalystId] += 1
+        return {
+            themeId = themeId,
+            count = profile.catalysts[catalystId],
+            scrapBalance = profile.scrap,
+        },
+            nil
+    end)
+    if not success then
+        return nil, errorCode or "Unavailable"
+    end
+    EconomyService.refreshPlayer(self, userId)
+    return data, nil
+end
 
 function EconomyService.sellCreature(
     self: any,
