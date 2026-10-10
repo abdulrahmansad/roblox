@@ -5,12 +5,14 @@ local RaidService = require("../src/server/services/RaidService")
 local RequestGuard = require("../src/server/security/RequestGuard")
 local SessionService = require("../src/server/services/SessionService")
 local ProfileStore = require("../src/server/persistence/ProfileStore")
+local TransferJournalStore = require("../src/server/persistence/TransferJournalStore")
 local PlayerDataService = require("../src/server/services/PlayerDataService")
 local EconomyService = require("../src/server/services/EconomyService")
 local CreatureService = require("../src/server/services/CreatureService")
 local CapsuleService = require("../src/server/services/CapsuleService")
 local MutationService = require("../src/server/services/MutationService")
 local ActionService = require("../src/server/services/ActionService")
+local TheftService = require("../src/server/services/TheftService")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
 local RaidConfig = require("../src/shared/config/RaidConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
@@ -56,6 +58,12 @@ local function makeFakeDataStore()
             self.failuresRemaining -= 1
             error("temporary DataStore failure")
         end
+        if self.failOnCall == self.calls then
+            error("injected one-shot DataStore failure")
+        end
+        if self.failOnCalls ~= nil and self.failOnCalls[self.calls] then
+            error("injected DataStore failure")
+        end
         local existing = self.records[key]
         local function keyInfoFor(record)
             if record == nil then
@@ -84,7 +92,14 @@ local function makeFakeDataStore()
             metadata = cloneTable(metadata or if existing ~= nil then existing.metadata else {}),
         }
         self.records[key] = updated
+        if self.failAfterWriteOnCall == self.calls then
+            error("injected ambiguous DataStore response")
+        end
         return cloneTable(updated.value), keyInfoFor(updated)
+    end
+    function store:GetAsync(key)
+        local existing = self.records[key]
+        return if existing ~= nil then cloneTable(existing.value) else nil
     end
     return store
 end
@@ -169,6 +184,201 @@ local function makeMutationContext(
     }
 end
 
+local function makeTheftContext(options: any?)
+    options = options or {}
+    local userIds = options.userIds or { 1_201, 1_202 }
+    local unixNow = { value = options.unixNow or 1_000 }
+    local monotonicNow = { value = options.monotonicNow or 10 }
+    local players = {}
+    local positions = {}
+    local humanoids = {}
+    local dataServices = {}
+    local nextCreatureId = 0
+    local attemptSequence = 0
+    local profileDataStore = makeFakeDataStore()
+    local dataService = PlayerDataService.new({
+        profileStore = makeProfileStore(profileDataStore),
+        clock = function()
+            return unixNow.value
+        end,
+        generateCreatureId = function()
+            nextCreatureId += 1
+            return "theft-starter-" .. tostring(nextCreatureId)
+        end,
+        autoSaveEnabled = false,
+        wait = function() end,
+    })
+    local baseService = BaseService.new({ baseCount = #userIds })
+    for _, userId in userIds do
+        local player = { UserId = userId, attributes = {} }
+        function player:SetAttribute(name, value)
+            self.attributes[name] = value
+        end
+        players[userId] = player
+        local assigned = baseService:assign(player)
+        assert(assigned ~= nil, "theft test player should receive a base")
+        assert(baseService:setOperational(player, true), "theft test player should be operational")
+        assert(dataService:load(userId), "theft test profile should load")
+        dataServices[userId] = dataService
+        humanoids[userId] = {
+            WalkSpeed = 16,
+            JumpPower = 50,
+            JumpHeight = 7.2,
+            UseJumpPower = true,
+            toolsEquipped = false,
+            UnequipTools = function(self)
+                self.toolsEquipped = false
+            end,
+        }
+    end
+    local ownerUserId = userIds[1]
+    local thiefUserId = userIds[2]
+    local ownerData = dataServices[ownerUserId]
+    local targetId = options.targetId or "theft-target"
+    local targetSpecies = CreatureDefinitions.SpeciesIdsByRarity.Common[2]
+    local targetCreature = { id = targetId, speciesId = targetSpecies }
+    local added, _, addError = ownerData:transact(ownerUserId, function(profile)
+        if options.ownerCapacity ~= nil then
+            profile.slotCapacity = options.ownerCapacity
+        end
+        profile.creatures[#profile.creatures + 1] = cloneTable(targetCreature)
+        profile.discoveredSpeciesIds[targetSpecies] = true
+        if options.welcomeTarget then
+            profile.welcomeCreatureId = targetId
+        end
+        if options.participationMarker ~= nil then
+            profile.firstRaidParticipation = cloneTable(options.participationMarker)
+        end
+        return { changed = true }
+    end)
+    assert(added and addError == nil, "test owner should receive the target creature")
+    if options.extraOwnerTargets then
+        for index = 1, options.extraOwnerTargets do
+            local extraId = "theft-extra-" .. tostring(index)
+            local speciesId = CreatureDefinitions.SpeciesIdsByRarity.Common[(index % 5) + 2]
+            local changed = ownerData:transact(ownerUserId, function(profile)
+                profile.creatures[#profile.creatures + 1] = { id = extraId, speciesId = speciesId }
+                profile.discoveredSpeciesIds[speciesId] = true
+                return { changed = true }
+            end)
+            assert(changed, "test owner should receive extra target")
+        end
+    end
+    if options.fillThief then
+        local thiefData = dataServices[thiefUserId]
+        local speciesId = CreatureDefinitions.SpeciesIdsByRarity.Common[2]
+        local filled = thiefData:transact(thiefUserId, function(profile)
+            profile.creatures[#profile.creatures + 1] =
+                { id = "thief-filler", speciesId = speciesId }
+            profile.discoveredSpeciesIds[speciesId] = true
+            return { changed = true }
+        end)
+        assert(filled, "test thief should be filled")
+    end
+    for _, userId in userIds do
+        assert(
+            CreatureService.new({
+                playerDataService = dataServices[userId],
+                baseService = baseService,
+            }):syncPlayer(userId),
+            "test creatures should project to their stands"
+        )
+    end
+    local raidService = RaidService.new({
+        initialPhase = options.phase or "RAID",
+        initialPhaseStartedAtUnix = unixNow.value,
+        clock = function()
+            return unixNow.value
+        end,
+        generateRaidId = function(sequence)
+            return "theft-raid-" .. tostring(sequence)
+        end,
+    })
+    if options.graceUserId ~= nil then
+        local raidId = raidService:getSnapshot().raidId
+        raidService:onOperationalChanged(options.graceUserId, true, raidId)
+    end
+    local journalDataStore = makeFakeDataStore()
+    local journalStore = TransferJournalStore.new({ store = journalDataStore })
+    local creatureService = CreatureService.new({
+        playerDataService = ownerData,
+        baseService = baseService,
+    })
+    local theftService = TheftService.new({
+        raidService = raidService,
+        playerDataService = dataService,
+        creatureService = creatureService,
+        baseService = baseService,
+        transferJournalStore = journalStore,
+        getPlayer = function(userId)
+            return players[userId]
+        end,
+        getPlayerPosition = function(player)
+            return positions[player.UserId]
+        end,
+        getHumanoid = function(player)
+            return humanoids[player.UserId]
+        end,
+        isOperational = function(player)
+            return baseService:isOperational(player)
+        end,
+        generateAttemptId = function()
+            if options.attemptId ~= nil then
+                return options.attemptId
+            end
+            attemptSequence += 1
+            return "theft-attempt-" .. tostring(attemptSequence)
+        end,
+        clock = function()
+            return monotonicNow.value
+        end,
+        unixClock = function()
+            return unixNow.value
+        end,
+        schedule = function(callback)
+            if options.runScheduled ~= false then
+                callback()
+            end
+        end,
+    })
+    local targetPosition = baseService:getCreatureDisplayPosition(ownerUserId, targetId)
+    positions[ownerUserId] = baseService:getHomePadPosition(ownerUserId)
+    positions[thiefUserId] = targetPosition
+    return {
+        ownerUserId = ownerUserId,
+        thiefUserId = thiefUserId,
+        targetId = targetId,
+        targetCreature = targetCreature,
+        players = players,
+        positions = positions,
+        humanoids = humanoids,
+        dataServices = dataServices,
+        dataService = dataService,
+        baseService = baseService,
+        creatureService = creatureService,
+        raidService = raidService,
+        theftService = theftService,
+        journalStore = journalStore,
+        journalDataStore = journalDataStore,
+        profileDataStore = profileDataStore,
+        unixNow = unixNow,
+        monotonicNow = monotonicNow,
+    }
+end
+
+local function beginAndCarryTheft(context: any, targetId: string?): string
+    local result, errorCode =
+        context.theftService:beginTheft(context.thiefUserId, targetId or context.targetId)
+    assert(result ~= nil and errorCode == nil, "valid theft should begin")
+    context.monotonicNow.value += RaidConfig.THEFT_CHANNEL_SECONDS
+    assert(context.theftService:step(context.monotonicNow.value), "theft state should step")
+    local attempt = context.theftService._attempts[result.attemptId]
+    assert(attempt ~= nil and attempt.state == "CARRIED", "completed channel should carry the item")
+    context.positions[context.thiefUserId] =
+        context.baseService:getHomePadPosition(context.thiefUserId)
+    return result.attemptId
+end
+
 local function completeMutationTutorial(context: any, themeId: string): any
     local profile = context.dataService:getSnapshot(context.player.UserId)
     local result, errorCode = context.mutationService:completeTutorialMutation(
@@ -239,6 +449,39 @@ test("central action protocol rejects unknown fields and client authority values
         action = "SetRaidPhase",
         payload = { phase = "RAID" },
     }), "clients cannot request a Raid phase transition")
+end)
+
+test("Raid action protocol accepts only server-measured interaction requests", function()
+    local shared = { sessionId = "raid-session-123", requestId = "raid-action-1" }
+    local cases = {
+        { action = "BeginTheft", payload = { targetCreatureId = "creature-a" } },
+        { action = "CancelTheft", payload = { attemptId = "attempt-a" } },
+        { action = "BankTheft", payload = { stage = "Begin", attemptId = "attempt-a" } },
+        {
+            action = "BankTheft",
+            payload = { stage = "Complete", attemptId = "attempt-a", catalystThemeId = "Ember" },
+        },
+        { action = "Tag", payload = { targetUserId = 1_302 } },
+        { action = "RecoverDroppedCreature", payload = { attemptId = "attempt-a" } },
+    }
+    for index, testCase in cases do
+        local request = cloneTable(shared)
+        request.requestId = "raid-action-" .. tostring(index)
+        request.action = testCase.action
+        request.payload = testCase.payload
+        assert(
+            Protocol.isValidActionRequest(request),
+            testCase.action .. " payload should be valid"
+        )
+        local claimedTime = cloneTable(request)
+        claimedTime.payload = cloneTable(testCase.payload)
+        claimedTime.payload.clientTimestamp = 1_000
+        assert(not Protocol.isValidActionRequest(claimedTime), "clients cannot submit server time")
+    end
+    local malformed = cloneTable(shared)
+    malformed.action = "BeginTheft"
+    malformed.payload = { targetCreatureId = "creature-a", ownerUserId = 1_301 }
+    assert(not Protocol.isValidActionRequest(malformed), "client cannot claim target ownership")
 end)
 
 test("server service initializes and accepts a valid request", function()
@@ -688,6 +931,7 @@ test("GetSnapshot returns authoritative Raid timing and private arrival grace", 
                 return nil
             end,
         },
+        theftService = {},
         baseService = BaseService.new({ baseCount = 1 }),
         requestEvent = { OnServerEvent = newSignal() },
         resultEvent = { FireClient = function() end },
@@ -1244,6 +1488,135 @@ test("shutdown saves profiles in parallel and releases session leases", function
     )
 end)
 
+test(
+    "transfer journal records intent, commits, and clears only after both profiles apply",
+    function()
+        local fakeStore = makeFakeDataStore()
+        local journal = TransferJournalStore.new({ store = fakeStore })
+        local record = {
+            transferId = "transfer-1",
+            fromUserId = 701,
+            toUserId = 702,
+            raidId = "raid-1",
+            creature = { id = "creature-1", speciesId = "PocketHydra" },
+            catalystThemeId = "Prism",
+            createdAtUnix = 1_000,
+        }
+        local prepared = journal:prepare(record)
+        expect(prepared)
+        expect(journal:prepare(record), "replaying the same journal intent is idempotent")
+        local ownerRecords = journal:getForUser(701)
+        expect(#ownerRecords == 1 and ownerRecords[1].state == "PREPARED")
+        expect(#journal:getForUser(702) == 1)
+
+        local conflict = cloneTable(record)
+        conflict.toUserId = 703
+        local conflictingPrepare = journal:prepare(conflict)
+        expect(not conflictingPrepare, "a transfer ID cannot be reused for another recipient")
+        expect(journal:commit("transfer-1"))
+        expect(journal:getForUser(701)[1].state == "COMMITTED")
+
+        expect(journal:markApplied("transfer-1", 701))
+        expect(#journal:getForUser(701) == 1, "one applied profile cannot clear the other receipt")
+        expect(journal:markApplied("transfer-1", 702))
+        expect(#journal:getForUser(701) == 0 and #journal:getForUser(702) == 0)
+    end
+)
+
+test("profile load rolls PREPARED transfers back and COMMITTED transfers forward", function()
+    local function loadPair(state: string, ownerHasCreature: boolean, thiefHasCreature: boolean)
+        local fakeStore = makeFakeDataStore()
+        local ownerProfile = PlayerDataService.createDefaultProfile(function()
+            return "owner-starter"
+        end)
+        local thiefProfile = PlayerDataService.createDefaultProfile(function()
+            return "thief-starter"
+        end)
+        ownerProfile.slotCapacity = 3
+        thiefProfile.slotCapacity = 3
+        local creature = { id = "journal-creature", speciesId = "PocketHydra" }
+        if ownerHasCreature then
+            table.insert(ownerProfile.creatures, cloneTable(creature))
+            ownerProfile.discoveredSpeciesIds.PocketHydra = true
+        end
+        if thiefHasCreature then
+            table.insert(thiefProfile.creatures, cloneTable(creature))
+            thiefProfile.discoveredSpeciesIds.PocketHydra = true
+            thiefProfile.catalysts.prismDust = 1
+        end
+        fakeStore.records.Player_711 = {
+            value = cloneTable(ownerProfile),
+            userIds = { 711 },
+            metadata = {},
+        }
+        fakeStore.records.Player_712 = {
+            value = cloneTable(thiefProfile),
+            userIds = { 712 },
+            metadata = {},
+        }
+
+        local journal = TransferJournalStore.new({ store = fakeStore })
+        local transfer = {
+            transferId = "journal-transfer",
+            fromUserId = 711,
+            toUserId = 712,
+            raidId = "journal-raid",
+            creature = creature,
+            catalystThemeId = "Prism",
+            createdAtUnix = 1_000,
+        }
+        assert(journal:prepare(transfer), "journal intent should be prepared")
+        if state == "COMMITTED" then
+            assert(journal:commit(transfer.transferId), "transfer should commit")
+        end
+
+        local nextCreatureId = 0
+        local dataService = PlayerDataService.new({
+            profileStore = makeProfileStore(fakeStore),
+            transferJournalStore = journal,
+            clock = function()
+                return 1_000
+            end,
+            generateCreatureId = function()
+                nextCreatureId += 1
+                return "journal-default-" .. tostring(nextCreatureId)
+            end,
+            autoSaveEnabled = false,
+            wait = function() end,
+        })
+        local ownerLoaded, ownerError = dataService:load(711)
+        assert(
+            ownerLoaded,
+            "owner profile should recover before gameplay: " .. tostring(ownerError)
+        )
+        local thiefLoaded, thiefError = dataService:load(712)
+        assert(
+            thiefLoaded,
+            "thief profile should recover before gameplay: " .. tostring(thiefError)
+        )
+        return dataService, fakeStore, journal
+    end
+
+    local rollback, rollbackStore, rollbackJournal = loadPair("PREPARED", false, true)
+    local restoredOwner = rollback:getSnapshot(711)
+    local restoredThief = rollback:getSnapshot(712)
+    expect(#restoredOwner.creatures == 2)
+    expect(restoredOwner.creatures[2].id == "journal-creature")
+    expect(#restoredThief.creatures == 1 and restoredThief.catalysts.prismDust == 0)
+    expect(#rollbackJournal:getForUser(711) == 0)
+    expect(rollbackStore.records.Player_711.value.creatures[2].id == "journal-creature")
+
+    local commit, commitStore, commitJournal = loadPair("COMMITTED", false, false)
+    local committedOwner = commit:getSnapshot(711)
+    local committedThief = commit:getSnapshot(712)
+    expect(#committedOwner.creatures == 1)
+    expect(#committedThief.creatures == 2)
+    expect(committedThief.creatures[2].id == "journal-creature")
+    expect(committedThief.catalysts.prismDust == 1)
+    expect(#commitJournal:getForUser(712) == 0)
+    expect(commitStore.records.Player_712.value.creatures[2].id == "journal-creature")
+end)
+
 test("elapsed first-Raid marker is normalized before profile exposure", function()
     local dataStore = makeFakeDataStore()
     local profile = PlayerDataService.createDefaultProfile(function()
@@ -1277,6 +1650,640 @@ test("elapsed first-Raid marker is normalized before profile exposure", function
         "durable marker must also be cleared"
     )
 end)
+
+test("first-Raid participation markers save immediately and never get replaced", function()
+    local dataService, dataStore = makeLoadedDataService(607, "first-raid-")
+    local started, marker = dataService:beginFirstRaidParticipation(607, "first-raid-a", 2_000)
+    expect(started and marker.raidId == "first-raid-a")
+    expect(marker.completesAtUnix == 2_000)
+    expect(
+        dataStore.records.Player_607.value.firstRaidParticipation.raidId == "first-raid-a",
+        "participation must be durably saved before returning"
+    )
+    local repeated, existing = dataService:beginFirstRaidParticipation(607, "later-raid", 3_000)
+    expect(repeated and existing.raidId == "first-raid-a")
+    expect(existing.completesAtUnix == 2_000, "a prior marker must never be replaced")
+
+    local early, _, earlyError =
+        dataService:finalizeFirstRaidParticipation(607, "first-raid-a", 2_000, 1_999)
+    expect(not early and earlyError == "NotExpired")
+    local finalized, changed =
+        dataService:finalizeFirstRaidParticipation(607, "first-raid-a", 2_000, 2_000)
+    expect(finalized and changed, "the exact completion timestamp expires protection")
+    local profile = dataService:getSnapshot(607)
+    expect(profile.hasCompletedFirstRaid and profile.firstRaidParticipation == nil)
+    expect(dataStore.records.Player_607.value.hasCompletedFirstRaid)
+end)
+
+test("Raid start marks present players and finalizes them at Resolution end", function()
+    local now = { value = 1_000 }
+    local onlineUsers = { 610, 611 }
+    local markers = {}
+    local completed = {}
+    local service = RaidService.new({
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "welcome-raid-" .. tostring(sequence)
+        end,
+        getPlayerUserIds = function()
+            return onlineUsers
+        end,
+        beginFirstRaidParticipation = function(userId, raidId, completesAtUnix)
+            if markers[userId] == nil then
+                markers[userId] = { raidId = raidId, completesAtUnix = completesAtUnix }
+            end
+            return true, markers[userId]
+        end,
+        getParticipationMarker = function(userId)
+            return markers[userId]
+        end,
+        finalizeFirstRaidParticipation = function(userId, raidId, completesAtUnix, timestamp)
+            local marker = markers[userId]
+            if
+                marker ~= nil
+                and marker.raidId == raidId
+                and marker.completesAtUnix == completesAtUnix
+                and timestamp >= completesAtUnix
+            then
+                markers[userId] = nil
+                completed[userId] = true
+                return true, true
+            end
+            return true, false
+        end,
+    })
+
+    now.value = 1_300
+    expect(service:step())
+    now.value = 1_330
+    expect(service:step())
+    local raidId = service:getSnapshot().raidId
+    for _, userId in onlineUsers do
+        expect(markers[userId] ~= nil, "players present at Raid start participate immediately")
+        expect(markers[userId].raidId == raidId)
+        expect(markers[userId].completesAtUnix == 1_450)
+    end
+
+    now.value = 1_420
+    expect(service:step())
+    expect(not completed[610], "first-Raid protection remains through RESOLUTION")
+    now.value = 1_450
+    expect(service:step())
+    expect(completed[610] and completed[611], "completion expires protection at COOLDOWN")
+    expect(markers[610] == nil and markers[611] == nil)
+end)
+
+test("late arrival grace participates only when expiry is strictly before Raid end", function()
+    local now = { value = 0 }
+    local markers = {}
+    local service = RaidService.new({
+        initialPhase = "RAID",
+        clock = function()
+            return now.value
+        end,
+        generateRaidId = function(sequence)
+            return "late-welcome-" .. tostring(sequence)
+        end,
+        beginFirstRaidParticipation = function(userId, raidId, completesAtUnix)
+            markers[userId] = markers[userId]
+                or {
+                    raidId = raidId,
+                    completesAtUnix = completesAtUnix,
+                }
+            return true, markers[userId]
+        end,
+    })
+    local raidId = service:getSnapshot().raidId
+    now.value = 70
+    expect(service:onOperationalChanged(621, true, raidId))
+    now.value = 80
+    expect(service:onOperationalChanged(620, true, raidId))
+    now.value = 85
+    expect(service:step())
+    expect(markers[621] ~= nil, "grace expiring at 85 begins first-Raid participation")
+    expect(markers[621].completesAtUnix == 120)
+    expect(markers[620] == nil, "grace expiring exactly at Raid end is ineligible")
+    now.value = 90
+    expect(service:step())
+    expect(markers[620] == nil, "late grace remains protected through later phases")
+end)
+
+test("theft channels server-side, carries one item, and commits a journaled bank", function()
+    local context = makeTheftContext()
+    local ownerBefore = context.dataService:getSnapshot(context.ownerUserId)
+    local thiefBefore = context.dataService:getSnapshot(context.thiefUserId)
+    local started, startError =
+        context.theftService:beginTheft(context.thiefUserId, context.targetId)
+    expect(started ~= nil and startError == nil)
+    expect(started.targetUserId == context.ownerUserId)
+    expect(context.theftService._attempts[started.attemptId].state == "CHANNELING")
+    expect(context.dataService:getSnapshot(context.ownerUserId).creatures[2].id == context.targetId)
+    expect(
+        #context.dataService:getSnapshot(context.thiefUserId).creatures == #thiefBefore.creatures
+    )
+
+    context.monotonicNow.value += RaidConfig.THEFT_CHANNEL_SECONDS
+    expect(context.theftService:step(context.monotonicNow.value))
+    local attempt = context.theftService._attempts[started.attemptId]
+    expect(attempt.state == "CARRIED")
+    expect(
+        context.players[context.thiefUserId].attributes.OddlingsCarriedCreatureId
+            == context.targetId
+    )
+    expect(context.humanoids[context.thiefUserId].WalkSpeed == 16 * 0.8)
+    context.humanoids[context.thiefUserId].toolsEquipped = true
+    expect(context.theftService:step(context.monotonicNow.value))
+    expect(
+        context.humanoids[context.thiefUserId].toolsEquipped == false,
+        "re-equipped tools are removed while carrying"
+    )
+    expect(context.humanoids[context.thiefUserId].JumpPower == 0)
+    expect(context.dataService:getSnapshot(context.ownerUserId).creatures[2].id == context.targetId)
+
+    context.positions[context.thiefUserId] =
+        context.baseService:getHomePadPosition(context.thiefUserId)
+    local bank, bankError = context.theftService:beginBank(context.thiefUserId, started.attemptId)
+    expect(bank ~= nil and bankError == nil)
+    context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    local result, resultError =
+        context.theftService:completeBank(context.thiefUserId, started.attemptId, "Ember")
+    expect(result ~= nil and resultError == nil)
+    expect(result.creatureId == context.targetId and result.catalystThemeId == "Ember")
+    local ownerAfter = context.dataService:getSnapshot(context.ownerUserId)
+    local thiefAfter = context.dataService:getSnapshot(context.thiefUserId)
+    expect(CreatureService.findInProfile(nil, ownerAfter, context.targetId) == nil)
+    expect(CreatureService.findInProfile(nil, thiefAfter, context.targetId) ~= nil)
+    expect(thiefAfter.catalysts.emberSeed == 1, "one chosen theft catalyst is granted after bank")
+    expect(
+        #ownerAfter.creatures + #thiefAfter.creatures
+            == #ownerBefore.creatures + #thiefBefore.creatures
+    )
+    expect(context.players[context.thiefUserId].attributes.OddlingsCarriedCreatureId == nil)
+    expect(context.humanoids[context.thiefUserId].WalkSpeed == 16)
+    expect(context.humanoids[context.thiefUserId].JumpPower == 50)
+end)
+
+test(
+    "theft locks same-owner races, protects starter and Welcome, and rejects full thief capacity",
+    function()
+        local contested = makeTheftContext({
+            userIds = { 1_211, 1_212, 1_213 },
+            ownerCapacity = 4,
+            extraOwnerTargets = 2,
+        })
+        local first, firstError =
+            contested.theftService:beginTheft(contested.thiefUserId, contested.targetId)
+        expect(first ~= nil and firstError == nil)
+        contested.positions[1_213] =
+            contested.baseService:getCreatureDisplayPosition(contested.ownerUserId, "theft-extra-1")
+        local sameOwner, sameOwnerError = contested.theftService:beginTheft(1_213, "theft-extra-1")
+        expect(
+            sameOwner == nil and sameOwnerError == "Locked",
+            "one channel locks the whole owner base"
+        )
+        local sameCreature, sameCreatureError =
+            contested.theftService:beginTheft(1_213, contested.targetId)
+        expect(
+            sameCreature == nil and sameCreatureError == "Locked",
+            "only one thief gets the target lock"
+        )
+
+        local protected = makeTheftContext({ welcomeTarget = true })
+        local welcome, welcomeError =
+            protected.theftService:beginTheft(protected.thiefUserId, protected.targetId)
+        expect(
+            welcome == nil and welcomeError == "Locked",
+            "unexpired Welcome creature stays protected"
+        )
+        local starterId = protected.dataService:getSnapshot(protected.ownerUserId).starterCreatureId
+        protected.positions[protected.thiefUserId] =
+            protected.baseService:getCreatureDisplayPosition(protected.ownerUserId, starterId)
+        local starter, starterError =
+            protected.theftService:beginTheft(protected.thiefUserId, starterId)
+        expect(
+            starter == nil and starterError == "Locked",
+            "starter Mossling stays permanently protected"
+        )
+
+        local full = makeTheftContext({ fillThief = true })
+        local fullResult, fullError = full.theftService:beginTheft(full.thiefUserId, full.targetId)
+        expect(
+            fullResult == nil and fullError == "CapacityFull",
+            "a full thief cannot reserve a slot"
+        )
+
+        local completedWelcome = makeTheftContext({
+            welcomeTarget = true,
+            participationMarker = { raidId = "previous-raid", completesAtUnix = 990 },
+        })
+        local expiredProtection = completedWelcome.theftService:beginTheft(
+            completedWelcome.thiefUserId,
+            completedWelcome.targetId
+        )
+        expect(
+            expiredProtection ~= nil,
+            "an elapsed participation marker expires Welcome protection"
+        )
+
+        local thiefGrace = makeTheftContext({ graceUserId = 1_202 })
+        local graceAttempt, graceError =
+            thiefGrace.theftService:beginTheft(thiefGrace.thiefUserId, thiefGrace.targetId)
+        expect(
+            graceAttempt == nil and graceError == "Locked",
+            "arrival grace blocks theft initiation"
+        )
+        local ownerGrace = makeTheftContext({ graceUserId = 1_201 })
+        local protectedBase, protectedBaseError =
+            ownerGrace.theftService:beginTheft(ownerGrace.thiefUserId, ownerGrace.targetId)
+        expect(
+            protectedBase == nil and protectedBaseError == "Locked",
+            "arrival grace protects the new owner's base"
+        )
+    end
+)
+
+test("creature attempts and theft limits remain fixed for each Raid", function()
+    local context = makeTheftContext({ ownerCapacity = 4, extraOwnerTargets = 2 })
+    local first, firstError = context.theftService:beginTheft(context.thiefUserId, context.targetId)
+    expect(first ~= nil and firstError == nil)
+    expect(context.theftService:cancelTheft(context.thiefUserId, first.attemptId))
+    local repeated, repeatedError =
+        context.theftService:beginTheft(context.thiefUserId, context.targetId)
+    expect(
+        repeated == nil and repeatedError == "Locked",
+        "the same creature is closed for this Raid"
+    )
+
+    context.positions[context.thiefUserId] =
+        context.baseService:getCreatureDisplayPosition(context.ownerUserId, "theft-extra-1")
+    local second, secondError =
+        context.theftService:beginTheft(context.thiefUserId, "theft-extra-1")
+    expect(second ~= nil and secondError == nil)
+    expect(context.theftService:cancelTheft(context.thiefUserId, second.attemptId))
+    context.positions[context.thiefUserId] =
+        context.baseService:getCreatureDisplayPosition(context.ownerUserId, "theft-extra-2")
+    local third, thirdError = context.theftService:beginTheft(context.thiefUserId, "theft-extra-2")
+    expect(third == nil and thirdError == "Locked", "attempt three is rejected")
+
+    local banked = makeTheftContext({
+        userIds = { 1_221, 1_222, 1_223 },
+        ownerCapacity = 3,
+        extraOwnerTargets = 1,
+    })
+    local attemptId = beginAndCarryTheft(banked)
+    banked.positions[banked.thiefUserId] = banked.baseService:getHomePadPosition(banked.thiefUserId)
+    expect(banked.theftService:beginBank(banked.thiefUserId, attemptId))
+    banked.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    expect(banked.theftService:completeBank(banked.thiefUserId, attemptId, "Prism"))
+    banked.positions[1_223] =
+        banked.baseService:getCreatureDisplayPosition(banked.ownerUserId, "theft-extra-1")
+    local secondBankAttempt, secondBankError =
+        banked.theftService:beginTheft(banked.thiefUserId, "theft-extra-1")
+    expect(secondBankAttempt == nil and secondBankError == "Locked", "a thief cannot bank twice")
+    local otherThief, otherThiefError = banked.theftService:beginTheft(1_223, "theft-extra-1")
+    expect(
+        otherThief == nil and otherThiefError == "Locked",
+        "an owner cannot lose twice in one Raid"
+    )
+    expect(banked.theftService._raidOwnerLosses[banked.ownerUserId] == "theft-raid-1")
+end)
+
+test(
+    "Tag cancels channels, drops carries, enforces cooldown, and recovery returns ownership",
+    function()
+        local context = makeTheftContext()
+        local begun = context.theftService:beginTheft(context.thiefUserId, context.targetId)
+        expect(begun ~= nil)
+        context.positions[context.ownerUserId] = context.positions[context.thiefUserId]
+        local tagged, tagError = context.theftService:tag(context.ownerUserId, context.thiefUserId)
+        expect(tagged ~= nil and tagError == nil and tagged.success)
+        expect(tagged.result == "Cancelled")
+        expect(context.theftService._attempts[begun.attemptId].state == "RETURNED")
+        expect(
+            context.humanoids[context.thiefUserId].WalkSpeed == 0,
+            "Tag applies a one-second stagger"
+        )
+        local repeated, repeatedError =
+            context.theftService:tag(context.ownerUserId, context.thiefUserId)
+        expect(
+            repeated == nil and repeatedError == "RateLimited",
+            "successful Tag starts defender cooldown"
+        )
+        context.monotonicNow.value += RaidConfig.TAG_STAGGER_SECONDS
+        expect(context.theftService:step(context.monotonicNow.value))
+        expect(context.humanoids[context.thiefUserId].WalkSpeed == 16)
+
+        local carried = makeTheftContext()
+        local attemptId = beginAndCarryTheft(carried)
+        carried.positions[carried.ownerUserId] = carried.positions[carried.thiefUserId]
+        local dropped, dropError =
+            carried.theftService:tag(carried.ownerUserId, carried.thiefUserId)
+        expect(dropped ~= nil and dropError == nil and dropped.result == "Dropped")
+        local attempt = carried.theftService._attempts[attemptId]
+        expect(attempt.state == "DROPPED")
+        expect(carried.dataService:getSnapshot(carried.thiefUserId).catalysts.emberSeed == 0)
+        local recovery, recoveryError =
+            carried.theftService:beginRecovery(carried.ownerUserId, attemptId)
+        expect(recovery ~= nil and recoveryError == nil and recovery.holdStarted)
+        carried.monotonicNow.value += RaidConfig.RECOVERY_HOLD_SECONDS
+        expect(carried.theftService:step(carried.monotonicNow.value))
+        expect(
+            attempt.state == "RETURNED",
+            "valid one-second recovery returns the original creature"
+        )
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                carried.dataService:getSnapshot(carried.ownerUserId),
+                carried.targetId
+            )
+        )
+
+        local immune = makeTheftContext({ userIds = { 1_231, 1_232, 1_233 } })
+        local firstAttempt = immune.theftService:beginTheft(immune.thiefUserId, immune.targetId)
+        immune.positions[immune.ownerUserId] = immune.positions[immune.thiefUserId]
+        expect(immune.theftService:tag(immune.ownerUserId, immune.thiefUserId))
+        immune.monotonicNow.value += RaidConfig.TAG_STAGGER_SECONDS
+        expect(immune.theftService:step(immune.monotonicNow.value))
+        local thirdTargetId = "third-owner-target"
+        local thirdSpecies = CreatureDefinitions.SpeciesIdsByRarity.Common[3]
+        local thirdAdded = immune.dataServices[1_233]:transact(1_233, function(profile)
+            profile.creatures[#profile.creatures + 1] =
+                { id = thirdTargetId, speciesId = thirdSpecies }
+            profile.discoveredSpeciesIds[thirdSpecies] = true
+            return { changed = true }
+        end)
+        expect(thirdAdded)
+        expect(immune.creatureService:syncPlayer(1_233))
+        immune.positions[immune.thiefUserId] =
+            immune.baseService:getCreatureDisplayPosition(1_233, thirdTargetId)
+        immune.positions[1_233] = immune.positions[immune.thiefUserId]
+        local secondAttempt = immune.theftService:beginTheft(immune.thiefUserId, thirdTargetId)
+        expect(secondAttempt ~= nil and secondAttempt.attemptId ~= firstAttempt.attemptId)
+        local immuneTag = immune.theftService:tag(1_233, immune.thiefUserId)
+        expect(immuneTag ~= nil and not immuneTag.success and immuneTag.result == "Miss")
+        expect(immune.theftService._attempts[secondAttempt.attemptId].state == "CHANNELING")
+    end
+)
+
+test("dropped creatures auto-return and disconnect or reset cancels active theft", function()
+    local context = makeTheftContext()
+    local attemptId = beginAndCarryTheft(context)
+    context.positions[context.ownerUserId] = context.positions[context.thiefUserId]
+    expect(context.theftService:tag(context.ownerUserId, context.thiefUserId))
+    local attempt = context.theftService._attempts[attemptId]
+    context.monotonicNow.value += RaidConfig.RECOVERY_WINDOW_SECONDS
+    expect(context.theftService:step(context.monotonicNow.value))
+    expect(attempt.state == "RETURNED", "an unrecovered drop automatically returns at five seconds")
+
+    local channeling = makeTheftContext()
+    local started = channeling.theftService:beginTheft(channeling.thiefUserId, channeling.targetId)
+    channeling.theftService:onPlayerRemoving(channeling.ownerUserId)
+    expect(channeling.theftService._attempts[started.attemptId].state == "RETURNED")
+    local reset = makeTheftContext()
+    local resetStarted = reset.theftService:beginTheft(reset.thiefUserId, reset.targetId)
+    reset.theftService:onOperationalChanged(reset.thiefUserId, false)
+    expect(reset.theftService._attempts[resetStarted.attemptId].state == "RETURNED")
+
+    local carrierReset = makeTheftContext()
+    local carriedId = beginAndCarryTheft(carrierReset)
+    carrierReset.theftService:onOperationalChanged(carrierReset.thiefUserId, false)
+    expect(carrierReset.theftService._attempts[carriedId].state == "RETURNED")
+
+    local ownerReset = makeTheftContext()
+    local protectedRunId = beginAndCarryTheft(ownerReset)
+    ownerReset.baseService:setOperational(ownerReset.players[ownerReset.ownerUserId], false)
+    ownerReset.theftService:onOperationalChanged(ownerReset.ownerUserId, false)
+    expect(
+        ownerReset.theftService._attempts[protectedRunId].state == "CARRIED",
+        "an owner's reset while an item is carried does not grant theft protection"
+    )
+
+    local ownerChannelReset = makeTheftContext()
+    local ownerChannelAttempt = ownerChannelReset.theftService:beginTheft(
+        ownerChannelReset.thiefUserId,
+        ownerChannelReset.targetId
+    )
+    ownerChannelReset.theftService:onOperationalChanged(ownerChannelReset.ownerUserId, false)
+    expect(
+        ownerChannelReset.theftService._attempts[ownerChannelAttempt.attemptId].state == "RETURNED"
+    )
+
+    local ownerCarryLeave = makeTheftContext()
+    local ownerCarryAttempt = beginAndCarryTheft(ownerCarryLeave)
+    ownerCarryLeave.theftService:onPlayerRemoving(ownerCarryLeave.ownerUserId)
+    expect(ownerCarryLeave.theftService._attempts[ownerCarryAttempt].state == "RETURNED")
+
+    local thiefCarryLeave = makeTheftContext()
+    local thiefCarryAttempt = beginAndCarryTheft(thiefCarryLeave)
+    thiefCarryLeave.theftService:onPlayerRemoving(thiefCarryLeave.thiefUserId)
+    expect(thiefCarryLeave.theftService._attempts[thiefCarryAttempt].state == "RETURNED")
+end)
+
+test("bank requires a full hold and completes strictly before the Raid boundary", function()
+    local tooEarly = makeTheftContext()
+    local earlyAttempt = beginAndCarryTheft(tooEarly)
+    local earlyBegin = tooEarly.theftService:beginBank(tooEarly.thiefUserId, earlyAttempt)
+    expect(earlyBegin ~= nil)
+    tooEarly.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS - 0.01
+    local incomplete, incompleteError =
+        tooEarly.theftService:completeBank(tooEarly.thiefUserId, earlyAttempt, "Prism")
+    expect(
+        incomplete == nil and incompleteError == "Locked",
+        "bank cannot complete before one second"
+    )
+    expect(
+        CreatureService.findInProfile(
+            nil,
+            tooEarly.dataService:getSnapshot(tooEarly.ownerUserId),
+            tooEarly.targetId
+        )
+    )
+
+    local exact = makeTheftContext()
+    local exactAttempt = beginAndCarryTheft(exact)
+    expect(exact.theftService:beginBank(exact.thiefUserId, exactAttempt))
+    exact.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    exact.unixNow.value = 1_090
+    local exactResult = exact.theftService:completeBank(exact.thiefUserId, exactAttempt, "Moss")
+    expect(exactResult == nil, "bank at the exact Raid end boundary must fail")
+    expect(
+        CreatureService.findInProfile(
+            nil,
+            exact.dataService:getSnapshot(exact.ownerUserId),
+            exact.targetId
+        )
+    )
+
+    local before = makeTheftContext()
+    local beforeAttempt = beginAndCarryTheft(before)
+    expect(before.theftService:beginBank(before.thiefUserId, beforeAttempt))
+    before.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    before.unixNow.value = 1_089
+    local success = before.theftService:completeBank(before.thiefUserId, beforeAttempt, "Moss")
+    expect(success ~= nil, "bank just before the Raid end boundary is allowed")
+    expect(before.dataService:getSnapshot(before.thiefUserId).catalysts.mossSpore == 1)
+end)
+
+test(
+    "journal retries transient commit failures and resolves an ambiguous write exactly once",
+    function()
+        local ambiguous = makeTheftContext()
+        local ambiguousAttempt = beginAndCarryTheft(ambiguous)
+        expect(ambiguous.theftService:beginBank(ambiguous.thiefUserId, ambiguousAttempt))
+        ambiguous.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+        ambiguous.journalDataStore.failAfterWriteOnCall = 2
+        local ambiguousResult, ambiguousError =
+            ambiguous.theftService:completeBank(ambiguous.thiefUserId, ambiguousAttempt, "Ember")
+        expect(ambiguousResult ~= nil and ambiguousError == nil)
+        expect(ambiguous.theftService._attempts[ambiguousAttempt].state == "BANKED")
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                ambiguous.dataService:getSnapshot(ambiguous.ownerUserId),
+                ambiguous.targetId
+            ) == nil
+        )
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                ambiguous.dataService:getSnapshot(ambiguous.thiefUserId),
+                ambiguous.targetId
+            )
+        )
+        expect(ambiguous.dataService:getSnapshot(ambiguous.thiefUserId).catalysts.emberSeed == 1)
+
+        local context = makeTheftContext()
+        local attemptId = beginAndCarryTheft(context)
+        expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+        context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+        context.journalDataStore.failOnCalls = { [2] = true, [3] = true, [4] = true }
+        local bankFailureResult, failure =
+            context.theftService:completeBank(context.thiefUserId, attemptId, "Ember")
+        expect(bankFailureResult == nil and failure == "ServiceUnavailable")
+        expect(context.theftService._attempts[attemptId].state == "CARRIED")
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                context.dataService:getSnapshot(context.ownerUserId),
+                context.targetId
+            )
+        )
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                context.dataService:getSnapshot(context.thiefUserId),
+                context.targetId
+            ) == nil
+        )
+        local journalIndex = context.journalDataStore.records.OddlingsTransfersV1.value
+        expect(next(journalIndex.records) == nil, "failed prepared intent is removed before retry")
+
+        expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+        context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+        local retried = context.theftService:completeBank(context.thiefUserId, attemptId, "Ember")
+        expect(retried ~= nil, "a fresh journal decision may safely retry the bank")
+        expect(
+            CreatureService.findInProfile(
+                nil,
+                context.dataService:getSnapshot(context.thiefUserId),
+                context.targetId
+            )
+        )
+    end
+)
+
+test(
+    "ActionService routes Raid requests with phase checks and request replay protection",
+    function()
+        local context = makeTheftContext()
+        local player = context.players[context.thiefUserId]
+        player.sessionId = "theft-action-session"
+        local actionService = ActionService.new({
+            sessionService = {
+                getSession = function(_self, candidate)
+                    if candidate == player then
+                        return { userId = player.UserId, sessionId = player.sessionId }
+                    end
+                    return nil
+                end,
+            },
+            raidService = context.raidService,
+            playerDataService = context.dataService,
+            economyService = {},
+            capsuleService = {},
+            mutationService = {
+                getOddsSnapshot = function()
+                    return nil
+                end,
+                getPending = function()
+                    return nil
+                end,
+            },
+            theftService = context.theftService,
+            baseService = context.baseService,
+            requestEvent = {},
+            resultEvent = {},
+            domainEvent = { FireClient = function() end },
+            clock = function()
+                return context.monotonicNow.value
+            end,
+            unixClock = function()
+                return context.unixNow.value
+            end,
+            isOperational = function()
+                return true
+            end,
+        })
+        local request = {
+            sessionId = player.sessionId,
+            requestId = "begin-theft-action",
+            action = "BeginTheft",
+            payload = { targetCreatureId = context.targetId },
+        }
+        local first = actionService:handle(player, request)
+        expect(first.ok and first.data.attemptId ~= nil)
+        local replay = actionService:handle(player, request)
+        expect(replay.ok and replay.data.attemptId == first.data.attemptId)
+        local altered = cloneTable(request)
+        altered.payload.targetCreatureId = "different-creature"
+        local conflict = actionService:handle(player, altered)
+        expect(not conflict.ok and conflict.code == "Conflict")
+
+        local peace = makeTheftContext({ phase = "PEACE" })
+        local peacePlayer = peace.players[peace.thiefUserId]
+        peacePlayer.sessionId = "peace-action-session"
+        local phaseService = ActionService.new({
+            sessionService = {
+                getSession = function()
+                    return { userId = peace.thiefUserId, sessionId = peacePlayer.sessionId }
+                end,
+            },
+            raidService = peace.raidService,
+            playerDataService = peace.dataService,
+            economyService = {},
+            capsuleService = {},
+            mutationService = { getOddsSnapshot = function() end, getPending = function() end },
+            theftService = peace.theftService,
+            baseService = peace.baseService,
+            requestEvent = {},
+            resultEvent = {},
+            domainEvent = { FireClient = function() end },
+            isOperational = function()
+                return true
+            end,
+        })
+        local wrongPhase = phaseService:handle(peacePlayer, {
+            sessionId = peacePlayer.sessionId,
+            requestId = "theft-outside-raid",
+            action = "BeginTheft",
+            payload = { targetCreatureId = peace.targetId },
+        })
+        expect(not wrongPhase.ok and wrongPhase.code == "WrongPhase")
+    end
+)
 
 test("Scrap credit is bounded and mutation inputs cannot exceed the profile cap", function()
     local dataStore = makeFakeDataStore()
@@ -2377,6 +3384,7 @@ test("ActionService routes mutation requests through station and transaction gua
         economyService = context.economyService,
         capsuleService = capsuleService,
         mutationService = context.mutationService,
+        theftService = {},
         baseService = {
             isOperational = function()
                 return true
@@ -2550,6 +3558,7 @@ test(
                     return nil
                 end,
             },
+            theftService = {},
             baseService = {
                 isOperational = function()
                     return true
@@ -2741,6 +3750,7 @@ test("ActionService contains a client response send error after disconnect", fun
                 return nil
             end,
         },
+        theftService = {},
         baseService = {
             isOperational = function()
                 return true

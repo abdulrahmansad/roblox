@@ -331,6 +331,51 @@ function BaseService.getForUserId(self: any, userId: number): any?
     return cloneBase(self._bases[index])
 end
 
+function BaseService.getCreatureDisplayPosition(self: any, userId: number, creatureId: string): any?
+    local baseIndex = self._userIdToBaseIndex[userId]
+    local base = if baseIndex ~= nil then self._bases[baseIndex] else nil
+    if base == nil or base.ownerUserId ~= userId or type(creatureId) ~= "string" then
+        return nil
+    end
+    local slotIndex = nil
+    for index, creature in base.creatures do
+        if creature.id == creatureId then
+            slotIndex = index
+            break
+        end
+    end
+    if slotIndex == nil then
+        return nil
+    end
+    local standParts = self._standParts[base.id]
+    local parts = if standParts ~= nil then standParts[slotIndex] else nil
+    if parts ~= nil and parts.display ~= nil then
+        return parts.display.Position
+    end
+    local offset = STAND_OFFSETS[slotIndex]
+    if offset == nil then
+        return nil
+    end
+    return {
+        x = base.spawn.x + offset.x,
+        y = 3,
+        z = base.spawn.z + offset.z,
+    }
+end
+
+function BaseService.getHomePadPosition(self: any, userId: number): any?
+    local baseIndex = self._userIdToBaseIndex[userId]
+    local base = if baseIndex ~= nil then self._bases[baseIndex] else nil
+    if base == nil or base.ownerUserId ~= userId then
+        return nil
+    end
+    local pad = self._plotParts[base.id]
+    if pad ~= nil then
+        return pad.Position
+    end
+    return { x = base.spawn.x, y = 1, z = base.spawn.z }
+end
+
 function BaseService.setCollection(
     self: any,
     userId: number,

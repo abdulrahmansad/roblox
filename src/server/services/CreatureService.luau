@@ -25,12 +25,25 @@ function CreatureService.new(options: any?)
     }, CreatureService)
 end
 
-function CreatureService.isProtectedFromTheft(_self: any, profile: any, creatureId: string): boolean
+function CreatureService.isProtectedFromTheft(
+    _self: any,
+    profile: any,
+    creatureId: string,
+    nowUnix: number?
+): boolean
     if type(profile) ~= "table" or type(creatureId) ~= "string" then
         return false
     end
-    return profile.starterCreatureId == creatureId
-        or (profile.welcomeCreatureId == creatureId and profile.hasCompletedFirstRaid == false)
+    if profile.starterCreatureId == creatureId then
+        return true
+    end
+    local marker = profile.firstRaidParticipation
+    local markerElapsed = type(marker) == "table"
+        and type(nowUnix) == "number"
+        and marker.completesAtUnix <= nowUnix
+    return profile.welcomeCreatureId == creatureId
+        and profile.hasCompletedFirstRaid == false
+        and not markerElapsed
 end
 
 function CreatureService.syncPlayer(self: any, userId: number): (boolean, string?)
@@ -127,6 +140,28 @@ function CreatureService.removeFromProfile(
     end
     if self:isRestricted(userId, creatureId) then
         return nil, "Locked"
+    end
+    local creature, index = CreatureService.findInProfile(self, profile, creatureId)
+    if creature == nil or index == nil then
+        return nil, "NotOwner"
+    end
+    table.remove(profile.creatures, index)
+    return cloneCreature(creature), nil
+end
+
+function CreatureService.removeReservedForTransfer(
+    self: any,
+    userId: number,
+    profile: any,
+    creatureId: string,
+    attemptId: string
+): (any?, string?)
+    local reservations = self._reservations[userId]
+    if reservations == nil or reservations[creatureId] ~= attemptId then
+        return nil, "Locked"
+    end
+    if profile.starterCreatureId == creatureId then
+        return nil, "StarterProtected"
     end
     local creature, index = CreatureService.findInProfile(self, profile, creatureId)
     if creature == nil or index == nil then

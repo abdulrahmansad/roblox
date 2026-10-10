@@ -38,6 +38,23 @@ export type RaidPhaseChangedData = {
     revision: number,
 }
 
+export type TheftAttemptState =
+    "CHANNELING"
+    | "CARRIED"
+    | "BANKING"
+    | "DROPPED"
+    | "RETURNED"
+    | "BANKED"
+
+export type TheftStateChangedData = {
+    attemptId: string,
+    state: TheftAttemptState,
+    thiefUserId: number,
+    ownerUserId: number,
+    creatureId: string,
+    serverTimeUnix: number,
+}
+
 local Protocol = {}
 local MUTATION_THEMES = { Ember = true, Prism = true, Moss = true }
 local MUTATION_CHOICES = { KeepCurrent = true, Replace = true, Decline = true }
@@ -51,6 +68,11 @@ Protocol.RemoteNames = table.freeze({
 
 Protocol.DomainEventNames = table.freeze({
     RaidPhaseChanged = "RaidPhaseChanged",
+    CreatureChanged = "CreatureChanged",
+    CatalystChanged = "CatalystChanged",
+    TheftStateChanged = "TheftStateChanged",
+    TheftBanked = "TheftBanked",
+    TagResolved = "TagResolved",
 })
 
 Protocol.PlayerAttributeNames = table.freeze({
@@ -63,6 +85,8 @@ Protocol.PlayerAttributeNames = table.freeze({
     ArrivalGraceRaidId = "OddlingsArrivalGraceRaidId",
     ArrivalGraceStartedAtUnix = "OddlingsArrivalGraceStartedAtUnix",
     ArrivalGraceEndsAtUnix = "OddlingsArrivalGraceEndsAtUnix",
+    CarryingAttemptId = "OddlingsCarryingAttemptId",
+    CarriedCreatureId = "OddlingsCarriedCreatureId",
 })
 
 local function hasExactKeys(value: any, allowedKeys: { [string]: boolean }): boolean
@@ -115,6 +139,40 @@ local function isValidPayload(action: string, payload: any): boolean
             and MUTATION_CHOICES[payload.choice] == true
     elseif action == "GetSnapshot" then
         return hasExactKeys(payload, {})
+    elseif action == "BeginTheft" then
+        return hasExactKeys(payload, { targetCreatureId = true })
+            and type(payload.targetCreatureId) == "string"
+            and #payload.targetCreatureId > 0
+            and #payload.targetCreatureId <= 128
+    elseif action == "CancelTheft" then
+        return hasExactKeys(payload, { attemptId = true })
+            and type(payload.attemptId) == "string"
+            and #payload.attemptId > 0
+            and #payload.attemptId <= 128
+    elseif action == "BankTheft" then
+        if payload.stage == "Begin" then
+            return hasExactKeys(payload, { attemptId = true, stage = true })
+                and type(payload.attemptId) == "string"
+                and #payload.attemptId > 0
+                and #payload.attemptId <= 128
+        elseif payload.stage == "Complete" then
+            return hasExactKeys(payload, { attemptId = true, stage = true, catalystThemeId = true })
+                and type(payload.attemptId) == "string"
+                and #payload.attemptId > 0
+                and #payload.attemptId <= 128
+                and MUTATION_THEMES[payload.catalystThemeId] == true
+        end
+        return false
+    elseif action == "Tag" then
+        return hasExactKeys(payload, { targetUserId = true })
+            and type(payload.targetUserId) == "number"
+            and payload.targetUserId > 0
+            and payload.targetUserId % 1 == 0
+    elseif action == "RecoverDroppedCreature" then
+        return hasExactKeys(payload, { attemptId = true })
+            and type(payload.attemptId) == "string"
+            and #payload.attemptId > 0
+            and #payload.attemptId <= 128
     end
     return false
 end

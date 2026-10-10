@@ -1,6 +1,6 @@
 # Raid and theft rules
 
-M5 implements the shared phase clock, Raid IDs, replicated phase snapshots/events, countdown presentation, and runtime join grace. Welcome first-Raid participation/protection transitions, theft, Tag, and recovery remain M6 work; the rules below stay authoritative for those upcoming implementations. Studio and multiplayer validation are tracked separately in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+M5 implements the shared phase clock, Raid IDs, replicated phase snapshots/events, countdown presentation, and runtime join grace. M6 implements the server-owned theft, Tag, recovery, and durable Welcome first-Raid participation rules below. Portable tests cover these flows; Studio and multiplayer validation remain pending as tracked in [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## Shared raid cycle
 

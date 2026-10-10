@@ -1,6 +1,6 @@
 # Planned network protocol
 
-This is the locked V1 network contract. M3 creates the centralized `ActionRequest`, `ActionResult`, and `DomainEvent` remotes and implements capsule/commerce actions. M4 implements catalyst purchases and tutorial/normal mutation actions. M5 implements `GetSnapshot`'s authoritative Raid timing/grace data and the `RaidPhaseChanged` event. Theft, Tag, and later action rows remain planned for their milestones. The existing `DevPing` remains a foundation-only smoke and is not part of this protocol.
+This is the locked V1 network contract. M3 creates the centralized `ActionRequest`, `ActionResult`, and `DomainEvent` remotes and implements capsule/commerce actions. M4 implements catalyst purchases and tutorial/normal mutation actions. M5 implements `GetSnapshot`'s authoritative Raid timing/grace data and the `RaidPhaseChanged` event. M6 implements the theft, Tag, bank, and recovery action rows below through the same server-validated protocol. Later action rows remain planned for their milestones. The existing `DevPing` remains a foundation-only smoke and is not part of this protocol.
 
 ## Envelope and rules
 

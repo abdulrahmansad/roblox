@@ -19,6 +19,18 @@ local MUTATING_ACTIONS = {
     CompleteTutorialMutation = true,
     StartMutation = true,
     ResolveMutation = true,
+    BeginTheft = true,
+    CancelTheft = true,
+    BankTheft = true,
+    Tag = true,
+    RecoverDroppedCreature = true,
+}
+local RAID_ACTIONS = {
+    BeginTheft = true,
+    CancelTheft = true,
+    BankTheft = true,
+    Tag = true,
+    RecoverDroppedCreature = true,
 }
 local ACTION_RATE = {
     PurchaseCapsule = { capacity = 2, refillPerSecond = 2 },
@@ -29,6 +41,11 @@ local ACTION_RATE = {
     StartMutation = { capacity = 1, refillPerSecond = 1 / 3 },
     ResolveMutation = { capacity = 2, refillPerSecond = 2 },
     GetSnapshot = { capacity = 1, refillPerSecond = 0.5 },
+    BeginTheft = { capacity = 1, refillPerSecond = 1 },
+    CancelTheft = { capacity = 2, refillPerSecond = 2 },
+    BankTheft = { capacity = 2, refillPerSecond = 2 },
+    Tag = { capacity = 2, refillPerSecond = 2 },
+    RecoverDroppedCreature = { capacity = 2, refillPerSecond = 2 },
 }
 local MAX_CACHED_REQUESTS = 2_048
 local STABLE_ERROR_CODES = {
@@ -124,6 +141,7 @@ function ActionService.new(options: any)
     assert(type(options.economyService) == "table", "economyService is required")
     assert(type(options.capsuleService) == "table", "capsuleService is required")
     assert(type(options.mutationService) == "table", "mutationService is required")
+    assert(type(options.theftService) == "table", "theftService is required")
     assert(type(options.baseService) == "table", "baseService is required")
     assert(
         type(options.baseService.isOperational) == "function",
@@ -146,6 +164,7 @@ function ActionService.new(options: any)
         _economyService = options.economyService,
         _capsuleService = options.capsuleService,
         _mutationService = options.mutationService,
+        _theftService = options.theftService,
         _baseService = options.baseService,
         _requestEvent = options.requestEvent,
         _resultEvent = options.resultEvent,
@@ -308,7 +327,14 @@ function ActionService._dispatch(
 ): (boolean, any?, string?)
     local raidSnapshot = self._raidService:getSnapshot(session.userId)
     local phase = raidSnapshot.phase
-    if request.action ~= "GetSnapshot" and ECONOMY_PHASES[phase] ~= true then
+    if RAID_ACTIONS[request.action] == true and phase ~= "RAID" then
+        return false, nil, "WrongPhase"
+    end
+    if
+        request.action ~= "GetSnapshot"
+        and RAID_ACTIONS[request.action] ~= true
+        and ECONOMY_PHASES[phase] ~= true
+    then
         return false, nil, "WrongPhase"
     end
 
@@ -352,7 +378,7 @@ function ActionService._dispatch(
     if not self:_isOperational(player) then
         return false, nil, "Unavailable"
     end
-    if not self:_isNearStation(player, request.action) then
+    if RAID_ACTIONS[request.action] ~= true and not self:_isNearStation(player, request.action) then
         return false, nil, "OutOfRange"
     end
 
@@ -389,6 +415,27 @@ function ActionService._dispatch(
             request.payload.choice,
             phase
         )
+    elseif request.action == "BeginTheft" then
+        data, errorCode =
+            self._theftService:beginTheft(session.userId, request.payload.targetCreatureId)
+    elseif request.action == "CancelTheft" then
+        data, errorCode = self._theftService:cancelTheft(session.userId, request.payload.attemptId)
+    elseif request.action == "BankTheft" then
+        if request.payload.stage == "Begin" then
+            data, errorCode =
+                self._theftService:beginBank(session.userId, request.payload.attemptId)
+        else
+            data, errorCode = self._theftService:completeBank(
+                session.userId,
+                request.payload.attemptId,
+                request.payload.catalystThemeId
+            )
+        end
+    elseif request.action == "Tag" then
+        data, errorCode = self._theftService:tag(session.userId, request.payload.targetUserId)
+    elseif request.action == "RecoverDroppedCreature" then
+        data, errorCode =
+            self._theftService:beginRecovery(session.userId, request.payload.attemptId)
     else
         return false, nil, "InvalidRequest"
     end

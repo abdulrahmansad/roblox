@@ -15,6 +15,8 @@ local RAID_ATTRIBUTES = table.freeze({
     PLAYER_ATTRIBUTES.ArrivalGraceRaidId,
     PLAYER_ATTRIBUTES.ArrivalGraceStartedAtUnix,
     PLAYER_ATTRIBUTES.ArrivalGraceEndsAtUnix,
+    PLAYER_ATTRIBUTES.CarryingAttemptId,
+    PLAYER_ATTRIBUTES.CarriedCreatureId,
 })
 
 local function defaultIsPlayer(player: any): boolean

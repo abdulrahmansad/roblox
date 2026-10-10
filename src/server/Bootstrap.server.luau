@@ -17,16 +17,45 @@ local EconomyService = require(ServerScriptService.Server.services.EconomyServic
 local CreatureService = require(ServerScriptService.Server.services.CreatureService)
 local CapsuleService = require(ServerScriptService.Server.services.CapsuleService)
 local MutationService = require(ServerScriptService.Server.services.MutationService)
+local TheftService = require(ServerScriptService.Server.services.TheftService)
 local ActionService = require(ServerScriptService.Server.services.ActionService)
 local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore)
+local TransferJournalStore = require(ServerScriptService.Server.persistence.TransferJournalStore)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
 
 assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match server capacity")
+local playerDataService: any = nil
+local theftService: any = nil
 local raidService = RaidService.new({
     clock = os.time,
     generateRaidId = function()
         return HttpService:GenerateGUID(false)
+    end,
+    getPlayerUserIds = function()
+        local userIds = {}
+        for _, player in Players:GetPlayers() do
+            table.insert(userIds, player.UserId)
+        end
+        return userIds
+    end,
+    beginFirstRaidParticipation = function(userId, raidId, completesAtUnix)
+        return playerDataService:beginFirstRaidParticipation(userId, raidId, completesAtUnix)
+    end,
+    finalizeFirstRaidParticipation = function(userId, raidId, completesAtUnix, nowUnix)
+        return playerDataService:finalizeFirstRaidParticipation(
+            userId,
+            raidId,
+            completesAtUnix,
+            nowUnix
+        )
+    end,
+    getParticipationMarker = function(userId)
+        local profile = playerDataService:getSnapshot(userId)
+        return if profile ~= nil then profile.firstRaidParticipation else nil
+    end,
+    schedule = function(callback)
+        task.spawn(callback)
     end,
 })
 local baseService = BaseService.new({
@@ -44,8 +73,12 @@ local profileStore = ProfileStore.new({
     lockTtlSeconds = EconomyConfig.SESSION_LOCK_TTL_SECONDS,
     maxAttempts = EconomyConfig.STORE_MAX_ATTEMPTS,
 })
-local playerDataService = PlayerDataService.new({
+local transferJournalStore = TransferJournalStore.new({
+    store = DataStoreService:GetDataStore("OddlingsTransferJournal"),
+})
+playerDataService = PlayerDataService.new({
     profileStore = profileStore,
+    transferJournalStore = transferJournalStore,
     clock = os.time,
     generateCreatureId = function()
         return HttpService:GenerateGUID(false)
@@ -113,6 +146,37 @@ local mutationService = MutationService.new({
         end
     end,
 })
+theftService = TheftService.new({
+    raidService = raidService,
+    playerDataService = playerDataService,
+    creatureService = creatureService,
+    baseService = baseService,
+    transferJournalStore = transferJournalStore,
+    getPlayer = function(userId)
+        return Players:GetPlayerByUserId(userId)
+    end,
+    generateAttemptId = function()
+        return HttpService:GenerateGUID(false)
+    end,
+    clock = os.clock,
+    unixClock = os.time,
+    schedule = function(callback)
+        task.spawn(callback)
+    end,
+    emitToUser = function(userId, event, data)
+        local player = Players:GetPlayerByUserId(userId)
+        if player ~= nil then
+            pcall(function()
+                domainEvent:FireClient(player, {
+                    event = event,
+                    revision = playerDataService:getRevision(userId) or 0,
+                    serverTimeUnix = os.time(),
+                    data = data,
+                })
+            end)
+        end
+    end,
+})
 local actionService: any = nil
 local sessionService = SessionService.new({
     baseService = baseService,
@@ -132,6 +196,16 @@ local sessionService = SessionService.new({
         return saved, reason
     end,
     onSessionReady = function(player)
+        local participationReady, participationError = raidService:onProfileReady(player.UserId)
+        if not participationReady then
+            warn(
+                string.format(
+                    "[Raid] First-Raid state is not ready: %s",
+                    tostring(participationError)
+                )
+            )
+            return false
+        end
         local synced, syncError = creatureService:syncPlayer(player.UserId)
         if not synced then
             warn(string.format("[Base] Could not sync collection: %s", tostring(syncError)))
@@ -140,6 +214,7 @@ local sessionService = SessionService.new({
         return economyService:startPlayer(player)
     end,
     onSessionEnded = function(player)
+        theftService:onPlayerRemoving(player.UserId)
         economyService:stopPlayer(player)
         mutationService:clearUser(player.UserId)
         creatureService:cleanupUser(player.UserId)
@@ -148,6 +223,7 @@ local sessionService = SessionService.new({
         end
     end,
     onOperationalChanged = function(player, isOperational, _base, joinedDuringRaidId)
+        theftService:onOperationalChanged(player.UserId, isOperational)
         local grace =
             raidService:onOperationalChanged(player.UserId, isOperational, joinedDuringRaidId)
         if grace ~= nil then
@@ -198,6 +274,7 @@ actionService = ActionService.new({
     economyService = economyService,
     capsuleService = capsuleService,
     mutationService = mutationService,
+    theftService = theftService,
     baseService = baseService,
     requestEvent = actionRequest,
     resultEvent = actionResult,
@@ -206,10 +283,12 @@ actionService = ActionService.new({
     mutationStationPart = mutationStationPart,
 })
 assert(actionService:start(), "ActionService failed to start")
+assert(theftService:start(RunService.Heartbeat), "TheftService failed to start")
 assert(raidService:start(RunService.Heartbeat), "RaidService failed to start")
 assert(sessionService:start(Players), "SessionService failed to start")
 game:BindToClose(function()
     actionService:stop()
+    theftService:shutdown(20)
     raidService:stop()
     for _, player in Players:GetPlayers() do
         economyService:stopPlayer(player)

@@ -9,6 +9,9 @@ local MutationDefinitions = if game ~= nil
 local EconomyConfig = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.config.EconomyConfig)
     else require("../../shared/config/EconomyConfig")
+local MutationConfig = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.config.MutationConfig)
+    else require("../../shared/config/MutationConfig")
 
 local PlayerDataService = {}
 PlayerDataService.__index = PlayerDataService
@@ -95,6 +98,7 @@ function PlayerDataService.new(options: any)
 
     return setmetatable({
         _profileStore = options.profileStore,
+        _transferJournalStore = options.transferJournalStore,
         _clock = options.clock,
         _generateCreatureId = options.generateCreatureId,
         _wait = options.wait or function(seconds)
@@ -113,6 +117,7 @@ function PlayerDataService.new(options: any)
         _closing = {},
         _transacting = {},
         _saving = {},
+        _transferLocks = {},
         _autoSaveTokens = {},
         _stopped = false,
     }, PlayerDataService)
@@ -309,6 +314,359 @@ function PlayerDataService._normalizeFirstRaid(profile: any, nowUnix: number): b
     return false
 end
 
+local function reconcileTransferRecord(
+    profile: any,
+    userId: number,
+    record: any
+): (boolean, string?)
+    if
+        type(record) ~= "table"
+        or (record.state ~= "PREPARED" and record.state ~= "COMMITTED")
+        or not isIntegerBetween(record.fromUserId, 1, 2_147_483_647)
+        or not isIntegerBetween(record.toUserId, 1, 2_147_483_647)
+        or record.fromUserId == record.toUserId
+        or type(record.transferId) ~= "string"
+        or type(record.raidId) ~= "string"
+        or type(record.creature) ~= "table"
+        or type(record.creature.id) ~= "string"
+        or not CreatureDefinitions.isSpeciesId(record.creature.speciesId)
+        or (record.creature.mutationFormId ~= nil and not MutationDefinitions.isFormId(
+            record.creature.mutationFormId
+        ))
+        or MutationConfig.CATALYSTS_BY_THEME[record.catalystThemeId] == nil
+    then
+        return false, "InvalidTransferJournalRecord"
+    end
+
+    local shouldOwn = (record.state == "PREPARED" and userId == record.fromUserId)
+        or (record.state == "COMMITTED" and userId == record.toUserId)
+    local shouldNotOwn = (record.state == "PREPARED" and userId == record.toUserId)
+        or (record.state == "COMMITTED" and userId == record.fromUserId)
+    if not shouldOwn and not shouldNotOwn then
+        return true, nil
+    end
+
+    local foundIndex = nil
+    for index, creature in profile.creatures do
+        if creature.id == record.creature.id then
+            foundIndex = index
+            break
+        end
+    end
+    if shouldNotOwn then
+        if foundIndex ~= nil then
+            table.remove(profile.creatures, foundIndex)
+            if record.state == "PREPARED" then
+                local catalystId = MutationConfig.CATALYSTS_BY_THEME[record.catalystThemeId]
+                profile.catalysts[catalystId] = math.max(0, profile.catalysts[catalystId] - 1)
+            end
+            return true, nil
+        end
+        return true, nil
+    end
+
+    if foundIndex ~= nil then
+        return true, nil
+    end
+    if #profile.creatures >= profile.slotCapacity then
+        return false, "TransferRecoveryCapacityConflict"
+    end
+    local creature = {
+        id = record.creature.id,
+        speciesId = record.creature.speciesId,
+    }
+    if record.creature.mutationFormId ~= nil then
+        creature.mutationFormId = record.creature.mutationFormId
+    end
+    table.insert(profile.creatures, creature)
+    profile.discoveredSpeciesIds[creature.speciesId] = true
+    if creature.mutationFormId ~= nil then
+        profile.discoveredMutationFormIds[creature.mutationFormId] = true
+    end
+    if record.state == "COMMITTED" then
+        local catalystId = MutationConfig.CATALYSTS_BY_THEME[record.catalystThemeId]
+        if profile.catalysts[catalystId] >= MutationConfig.MAX_CATALYST_COUNT then
+            return false, "TransferRecoveryCatalystConflict"
+        end
+        profile.catalysts[catalystId] += 1
+    end
+    return true, nil
+end
+
+function PlayerDataService.beginFirstRaidParticipation(
+    self: any,
+    userId: number,
+    raidId: string,
+    completesAtUnix: number
+): (boolean, any?, string?)
+    if
+        type(userId) ~= "number"
+        or userId <= 0
+        or userId % 1 ~= 0
+        or not validRaidId(raidId)
+        or not isIntegerBetween(completesAtUnix, 0, 4_102_444_800)
+    then
+        return false, nil, "InvalidFirstRaidParticipation"
+    end
+    local profile = self._profiles[userId]
+    if profile == nil then
+        return false, nil, "ProfileNotLoaded"
+    end
+    if profile.hasCompletedFirstRaid then
+        if self._dirty[userId] then
+            local saved, saveError = self:save(userId, false)
+            if not saved then
+                return false, nil, saveError or "SaveFailed"
+            end
+        end
+        return true, nil, nil
+    end
+    if profile.firstRaidParticipation ~= nil then
+        local marker = cloneValue(profile.firstRaidParticipation)
+        if self._dirty[userId] then
+            local saved, saveError = self:save(userId, false)
+            if not saved then
+                return false, marker, saveError or "SaveFailed"
+            end
+        end
+        return true, marker, nil
+    end
+
+    local transacted, result, transactionError = self:transact(userId, function(draft)
+        if draft.hasCompletedFirstRaid then
+            return { changed = false }
+        end
+        if draft.firstRaidParticipation ~= nil then
+            return { changed = false, marker = draft.firstRaidParticipation }
+        end
+        draft.firstRaidParticipation = {
+            raidId = raidId,
+            completesAtUnix = completesAtUnix,
+        }
+        return { changed = true, marker = draft.firstRaidParticipation }
+    end)
+    if not transacted or result == nil then
+        return false, nil, transactionError or "Unavailable"
+    end
+    local marker = cloneValue(result.marker)
+    if result.changed or self._dirty[userId] then
+        local saved, saveError = self:save(userId, false)
+        if not saved then
+            return false, marker, saveError or "SaveFailed"
+        end
+    end
+    return true, marker, nil
+end
+
+function PlayerDataService.finalizeFirstRaidParticipation(
+    self: any,
+    userId: number,
+    raidId: string,
+    completesAtUnix: number,
+    nowUnix: number?
+): (boolean, boolean, string?)
+    local now = if nowUnix ~= nil then nowUnix else self._clock()
+    if
+        type(userId) ~= "number"
+        or userId <= 0
+        or userId % 1 ~= 0
+        or not validRaidId(raidId)
+        or not isIntegerBetween(completesAtUnix, 0, 4_102_444_800)
+        or type(now) ~= "number"
+        or now ~= now
+        or now == math.huge
+        or now == -math.huge
+    then
+        return false, false, "InvalidFirstRaidParticipation"
+    end
+    local profile = self._profiles[userId]
+    if profile == nil then
+        return false, false, "ProfileNotLoaded"
+    end
+    if profile.hasCompletedFirstRaid then
+        if self._dirty[userId] then
+            local saved, saveError = self:save(userId, false)
+            if not saved then
+                return false, false, saveError or "SaveFailed"
+            end
+        end
+        return true, false, nil
+    end
+    local marker = profile.firstRaidParticipation
+    if marker == nil or marker.raidId ~= raidId or marker.completesAtUnix ~= completesAtUnix then
+        return true, false, nil
+    end
+    if now < completesAtUnix then
+        return false, false, "NotExpired"
+    end
+
+    local transacted, result, transactionError = self:transact(userId, function(draft)
+        local current = draft.firstRaidParticipation
+        if
+            current == nil
+            or current.raidId ~= raidId
+            or current.completesAtUnix ~= completesAtUnix
+        then
+            return { changed = false }
+        end
+        if now < current.completesAtUnix then
+            return nil, "NotExpired"
+        end
+        draft.firstRaidParticipation = nil
+        draft.hasCompletedFirstRaid = true
+        return { changed = true }
+    end)
+    if not transacted or result == nil then
+        return false, false, transactionError or "Unavailable"
+    end
+    if result.changed or self._dirty[userId] then
+        local saved, saveError = self:save(userId, false)
+        if not saved then
+            return false, result.changed, saveError or "SaveFailed"
+        end
+    end
+    return true, result.changed, nil
+end
+
+function PlayerDataService.lockTransfer(
+    self: any,
+    transferId: string,
+    fromUserId: number,
+    toUserId: number,
+    creatureId: string,
+    catalystThemeId: string
+): (any?, string?)
+    local catalystId = MutationConfig.CATALYSTS_BY_THEME[catalystThemeId]
+    if
+        type(transferId) ~= "string"
+        or #transferId < 1
+        or #transferId > 128
+        or not isIntegerBetween(fromUserId, 1, 2_147_483_647)
+        or not isIntegerBetween(toUserId, 1, 2_147_483_647)
+        or fromUserId == toUserId
+        or type(creatureId) ~= "string"
+        or #creatureId < 1
+        or #creatureId > 128
+        or catalystId == nil
+    then
+        return nil, "InvalidTransfer"
+    end
+
+    local ownerProfile = self._profiles[fromUserId]
+    local thiefProfile = self._profiles[toUserId]
+    if ownerProfile == nil or thiefProfile == nil then
+        return nil, "ProfileNotLoaded"
+    end
+    if
+        self._closing[fromUserId]
+        or self._closing[toUserId]
+        or self._transferLocks[fromUserId] ~= nil
+        or self._transferLocks[toUserId] ~= nil
+        or self._transacting[fromUserId]
+        or self._transacting[toUserId]
+    then
+        return nil, "Locked"
+    end
+
+    local creature = nil
+    for _, ownedCreature in ownerProfile.creatures do
+        if ownedCreature.id == creatureId then
+            creature = ownedCreature
+            break
+        end
+    end
+    if creature == nil then
+        return nil, "NotOwner"
+    end
+    if creatureId == ownerProfile.starterCreatureId then
+        return nil, "Locked"
+    end
+    if #thiefProfile.creatures >= thiefProfile.slotCapacity then
+        return nil, "CapacityFull"
+    end
+    for _, ownedCreature in thiefProfile.creatures do
+        if ownedCreature.id == creatureId then
+            return nil, "Conflict"
+        end
+    end
+    if thiefProfile.catalysts[catalystId] >= MutationConfig.MAX_CATALYST_COUNT then
+        return nil, "CapacityFull"
+    end
+
+    self._transferLocks[fromUserId] = transferId
+    self._transferLocks[toUserId] = transferId
+    return cloneValue(creature), nil
+end
+
+function PlayerDataService.finishTransfer(self: any, record: any): (boolean, string?)
+    if
+        type(record) ~= "table"
+        or type(record.transferId) ~= "string"
+        or record.state ~= "COMMITTED"
+        or not isIntegerBetween(record.fromUserId, 1, 2_147_483_647)
+        or not isIntegerBetween(record.toUserId, 1, 2_147_483_647)
+    then
+        return false, "InvalidTransfer"
+    end
+    local fromUserId = record.fromUserId
+    local toUserId = record.toUserId
+    if
+        self._transferLocks[fromUserId] ~= record.transferId
+        or self._transferLocks[toUserId] ~= record.transferId
+    then
+        return false, "TransferLockMissing"
+    end
+
+    local ownerProfile = self._profiles[fromUserId]
+    local thiefProfile = self._profiles[toUserId]
+    if ownerProfile == nil or thiefProfile == nil then
+        return false, "ProfileNotLoaded"
+    end
+    local ownerDraft = cloneValue(ownerProfile)
+    local thiefDraft = cloneValue(thiefProfile)
+    local ownerApplied, ownerError = reconcileTransferRecord(ownerDraft, fromUserId, record)
+    local thiefApplied, thiefError = reconcileTransferRecord(thiefDraft, toUserId, record)
+    if not ownerApplied or not thiefApplied then
+        return false, ownerError or thiefError or "TransferConflict"
+    end
+    local ownerValid, ownerValidationError = PlayerDataService.validateProfile(ownerDraft)
+    local thiefValid, thiefValidationError = PlayerDataService.validateProfile(thiefDraft)
+    if not ownerValid or not thiefValid then
+        return false, ownerValidationError or thiefValidationError or "TransferProfileInvalid"
+    end
+
+    self._profiles[fromUserId] = ownerDraft
+    self._profiles[toUserId] = thiefDraft
+    self._dirty[fromUserId] = true
+    self._dirty[toUserId] = true
+    self._revision[fromUserId] += 1
+    self._revision[toUserId] += 1
+    self._transferLocks[fromUserId] = nil
+    self._transferLocks[toUserId] = nil
+    return true, nil
+end
+
+function PlayerDataService.abortTransferLock(
+    self: any,
+    transferId: string,
+    fromUserId: number,
+    toUserId: number
+): boolean
+    if type(transferId) ~= "string" then
+        return false
+    end
+    local released = false
+    if self._transferLocks[fromUserId] == transferId then
+        self._transferLocks[fromUserId] = nil
+        released = true
+    end
+    if self._transferLocks[toUserId] == transferId then
+        self._transferLocks[toUserId] = nil
+        released = true
+    end
+    return released
+end
+
 function PlayerDataService._startAutoSave(self: any, userId: number)
     if not self._autoSaveEnabled then
         return
@@ -357,7 +715,57 @@ function PlayerDataService.load(self: any, userId: number): (boolean, string?)
         return false, validationError or "CorruptProfile"
     end
 
-    local changed = PlayerDataService._normalizeFirstRaid(profile, self._clock())
+    local journalRecords = {}
+    local journalChanged = false
+    if self._transferJournalStore ~= nil then
+        local readOk, records, journalError =
+            pcall(self._transferJournalStore.getForUser, self._transferJournalStore, userId)
+        if not readOk or type(records) ~= "table" then
+            if type(self._profileStore.release) == "function" then
+                pcall(self._profileStore.release, self._profileStore, userId)
+            end
+            return false,
+                if readOk then journalError or "TransferJournalUnavailable" else tostring(records)
+        end
+        journalRecords = records
+        for _, record in journalRecords do
+            local beforeCount = #profile.creatures
+            local creatureFoundBefore = false
+            for _, creature in profile.creatures do
+                if creature.id == record.creature.id then
+                    creatureFoundBefore = true
+                    break
+                end
+            end
+            local applied, applyError = reconcileTransferRecord(profile, userId, record)
+            if not applied then
+                if type(self._profileStore.release) == "function" then
+                    pcall(self._profileStore.release, self._profileStore, userId)
+                end
+                return false, applyError or "TransferJournalConflict"
+            end
+            local creatureFoundAfter = false
+            for _, creature in profile.creatures do
+                if creature.id == record.creature.id then
+                    creatureFoundAfter = true
+                    break
+                end
+            end
+            journalChanged = journalChanged
+                or #profile.creatures ~= beforeCount
+                or creatureFoundBefore ~= creatureFoundAfter
+        end
+        local journalProfileValid, journalValidationError =
+            PlayerDataService.validateProfile(profile)
+        if not journalProfileValid then
+            if type(self._profileStore.release) == "function" then
+                pcall(self._profileStore.release, self._profileStore, userId)
+            end
+            return false, journalValidationError or "TransferJournalConflict"
+        end
+    end
+
+    local changed = journalChanged or PlayerDataService._normalizeFirstRaid(profile, self._clock())
     if changed then
         local saved, saveError = self._profileStore:save(userId, profile, false)
         if not saved then
@@ -365,6 +773,25 @@ function PlayerDataService.load(self: any, userId: number): (boolean, string?)
                 pcall(self._profileStore.release, self._profileStore, userId)
             end
             return false, saveError or "ProfileNormalizationSaveFailed"
+        end
+    end
+
+    if self._transferJournalStore ~= nil then
+        for _, record in journalRecords do
+            local marked, markError = pcall(
+                self._transferJournalStore.markApplied,
+                self._transferJournalStore,
+                record.transferId,
+                userId
+            )
+            if not marked or markError == false then
+                warn(
+                    string.format(
+                        "[PlayerData] Transfer journal receipt pending: %s",
+                        tostring(markError)
+                    )
+                )
+            end
         end
     end
 
@@ -415,6 +842,9 @@ function PlayerDataService.transact(
     end
     if self._closing[userId] then
         return false, nil, "ProfileClosing"
+    end
+    if self._transferLocks[userId] ~= nil then
+        return false, nil, "Locked"
     end
     if self._transacting[userId] then
         return false, nil, "Conflict"
@@ -486,7 +916,7 @@ function PlayerDataService.save(self: any, userId: number, release: boolean?): (
         return false, "ProfileNotLoaded"
     end
     local deadline = os.clock() + 10
-    while self._saving[userId] do
+    while self._saving[userId] or self._transferLocks[userId] ~= nil do
         if os.clock() >= deadline then
             return false, "SaveInProgress"
         end
