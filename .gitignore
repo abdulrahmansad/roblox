@@ -1,0 +1,33 @@
+# Generated builds and synced package sources
+/build/
+/Packages/
+/ServerPackages/
+/DevPackages/
+
+# Tool caches and local state
+.rokit-cache/
+.lune/
+.selene_cache/
+*.log
+*.tmp
+*.temp
+
+# Roblox Studio local files
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.lock
+!wally.lock
+
+# Secrets and machine-specific files
+.env
+.env.*
+!.env.example
+*.secret
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*.local.json
