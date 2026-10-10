@@ -14,6 +14,7 @@ local MutationService = require("../src/server/services/MutationService")
 local ActionService = require("../src/server/services/ActionService")
 local TheftService = require("../src/server/services/TheftService")
 local TagService = require("../src/server/services/TagService")
+local HudModel = require("../src/client/controllers/HudModel")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
 local RaidConfig = require("../src/shared/config/RaidConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
@@ -350,6 +351,7 @@ local function makeTheftContext(options: any?)
         unixClock = function()
             return unixNow.value
         end,
+        emitToUser = options.emitToUser,
         schedule = function(callback)
             if options.runScheduled ~= false then
                 callback()
@@ -992,6 +994,7 @@ test("GetSnapshot returns authoritative Raid timing and private arrival grace", 
     expect(response.data.raid.serverTimeUnix == 2_000)
     expect(response.data.arrivalGrace.active)
     expect(response.data.arrivalGrace.expiresAtUnix == 2_015)
+    expect(response.data.welcomeAvailable == true)
 end)
 
 test("a pre-existing player does not gain Raid grace from a reset after Raid starts", function()
@@ -1276,6 +1279,62 @@ test("profile defaults contain the protected starter and exact starting economy"
     assert(profile.standardCapsulePity.belowRare == 0, "fresh profile must start with zero pity")
     assert(profile.discoveredSpeciesIds.Mossling, "starter species must be discovered")
     assert(profile.hasCompletedFirstRaid == false, "fresh profile has not completed a Raid")
+end)
+
+test("M8 HUD summarizes income, first-session goals, rarity labels, and action feedback", function()
+    local profile = PlayerDataService.createDefaultProfile(function()
+        return "hud-starter"
+    end)
+    local income = HudModel.getIncomePerMinute(profile.creatures)
+    expect(income == 40 and HudModel.formatNumber(income) == "40")
+    expect(
+        string.find(HudModel.getGoal({ tutorialCompleted = false }), "free Common mutation") ~= nil
+    )
+
+    profile.creatures[1].mutationFormId = "Cinder"
+    expect(HudModel.getIncomePerMinute(profile.creatures) == 50)
+    expect(HudModel.formatNumber(126.5) == "126.5")
+    local welcomeGoal = HudModel.getGoal({
+        tutorialCompleted = true,
+        welcomeAvailable = true,
+    })
+    expect(string.find(welcomeGoal, "120 Scrap") ~= nil)
+    local skippedGuideGoal = HudModel.getGoal({
+        tutorialCompleted = false,
+        welcomeAvailable = true,
+    }, true)
+    expect(string.find(skippedGuideGoal, "120 Scrap") ~= nil)
+
+    local choiceGoal = HudModel.getGoal({
+        tutorialCompleted = true,
+        welcomeAvailable = false,
+        creatures = { {}, {} },
+        slotCapacity = 2,
+    })
+    expect(string.find(choiceGoal, "Slot 3") ~= nil and string.find(choiceGoal, "mutation") ~= nil)
+    local slotGoal = HudModel.getGoal({
+        tutorialCompleted = true,
+        welcomeAvailable = false,
+        creatures = { {}, {}, {} },
+        slotCapacity = 3,
+        hasCompletedFirstRaid = false,
+    })
+    expect(string.find(slotGoal, "first Raid") ~= nil)
+
+    local rarity = HudModel.getRarityPresentation("Rare")
+    expect(rarity.icon == "✦" and rarity.label == "RARE" and rarity.color == "Rare")
+    expect(HudModel.MIN_TOUCH_TARGET_PX >= 52)
+    local odds = HudModel.formatOdds({
+        rareGuaranteeActive = true,
+        nextRoll = { rare = 999, mythic = 1 },
+    })
+    expect(
+        string.find(odds, "Rare 99.9%", 1, true) ~= nil
+            and string.find(odds, "Mythic 0.1%", 1, true) ~= nil
+    )
+    local creatureLabel, creatureRarity = HudModel.getCreatureLabel(profile.creatures[1])
+    expect(creatureLabel == "Mossling · Cinder" and creatureRarity == "Common")
+    expect(string.find(HudModel.getErrorCopy("InsufficientCatalyst"), "Commons") ~= nil)
 end)
 
 test("profile validation rejects corrupt fields and unknown schema versions", function()
@@ -2189,6 +2248,21 @@ test("theft channels server-side, carries one item, and commits a journaled bank
     expect(context.humanoids[context.thiefUserId].JumpPower == 50)
 end)
 
+test("a cancellation at the completed channel boundary cannot undo a valid theft", function()
+    local context = makeTheftContext()
+    local begun, beginError = context.theftService:beginTheft(context.thiefUserId, context.targetId)
+    expect(begun ~= nil and beginError == nil)
+
+    context.monotonicNow.value += RaidConfig.THEFT_CHANNEL_SECONDS
+    local cancelled, cancelError =
+        context.theftService:cancelTheft(context.thiefUserId, begun.attemptId)
+    expect(cancelled == nil and cancelError == "Locked")
+    expect(
+        context.theftService._attempts[begun.attemptId].state == "CARRIED",
+        "the server must complete a valid elapsed channel before accepting cancellation"
+    )
+end)
+
 test(
     "theft locks same-owner races, protects starter and Welcome, and rejects full thief capacity",
     function()
@@ -2399,6 +2473,46 @@ test("Tag rejects non-finite server-observed positions", function()
     local result, tagError = context.tagService:tag(context.ownerUserId, context.thiefUserId)
     expect(result ~= nil and tagError == nil and not result.success and result.result == "Miss")
     expect(context.theftService._attempts[attempt.attemptId].state == "CHANNELING")
+end)
+
+test("dropped-creature events send the recovery target only to the involved players", function()
+    local delivered = {}
+    local context = makeTheftContext({
+        userIds = { 1_301, 1_302, 1_303 },
+        emitToUser = function(userId, event, data)
+            table.insert(delivered, { userId = userId, event = event, data = cloneTable(data) })
+        end,
+    })
+    local attemptId = beginAndCarryTheft(context)
+    local expected = context.positions[context.thiefUserId]
+    context.positions[context.ownerUserId] = expected
+    expect(context.tagService:tag(context.ownerUserId, context.thiefUserId))
+
+    local targetByUser = {}
+    for _, message in delivered do
+        if
+            message.event == Protocol.DomainEventNames.TheftStateChanged
+            and message.data.state == "DROPPED"
+        then
+            targetByUser[message.userId] = message.data.dropPosition
+        end
+    end
+    for _, userId in { context.ownerUserId, context.thiefUserId } do
+        local dropPosition = targetByUser[userId]
+        expect(dropPosition ~= nil, "both involved clients need a recovery marker")
+        local expectedX = expected.X or expected.x
+        local expectedY = expected.Y or expected.y
+        local expectedZ = expected.Z or expected.z
+        expect(
+            dropPosition.x == expectedX
+                and dropPosition.y == expectedY
+                and dropPosition.z == expectedZ
+        )
+    end
+    for _, message in delivered do
+        expect(message.userId ~= 1_303, "drop location must never be sent to uninvolved players")
+    end
+    expect(context.theftService._attempts[attemptId].state == "DROPPED")
 end)
 
 test("dropped creatures auto-return and disconnect or reset cancels active theft", function()

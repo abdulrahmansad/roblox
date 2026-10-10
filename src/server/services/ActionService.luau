@@ -370,6 +370,7 @@ function ActionService._dispatch(
                     speciesIds = profile.discoveredSpeciesIds,
                     mutationFormIds = profile.discoveredMutationFormIds,
                 },
+                welcomeAvailable = profile.welcomeCreatureId == nil,
                 tutorialCompleted = profile.tutorialCompleted,
                 hasCompletedFirstRaid = profile.hasCompletedFirstRaid,
             },

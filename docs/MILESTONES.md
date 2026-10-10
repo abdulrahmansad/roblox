@@ -109,6 +109,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Acceptance:** Tutorial mutation is one-time and immediate; all core actions have clear touch controls; UI reflects server state; audio cues have visual alternatives.
 - **Docs:** `PLAYER_FLOW.md`, `GAME_DESIGN.md`, `TESTING.md`, `PROJECT_STATUS.md`.
 - **Commit boundary:** One onboarding/UI commit, no new economy or raid rules.
+- **Current evidence:** Portable verification passes formatting, Selene (0 issues), 84 Lune tests, and Rojo build. The client now has the locked first-session theme choice and goal flow, skippable guidance that preserves the free mutation, compact economy HUD, affordable commerce/mutation controls, rarity/odds/error presentation, contextual touch/keyboard actions, radial hold progress, and a local recovery marker. Snapshot Welcome availability is server-derived; dropped positions are sent only to the owner and thief. The HUD model, skipped-guide goal, Welcome snapshot field, event privacy, and completed theft-hold cancellation boundary have portable regression coverage. Roblox Studio phone emulation, real touch input, two-client presentation, and device accessibility remain pending and are not claimed as passed. M9 adds the locked audio cues; captions already provide visual alternatives.
 
 ## M9 — MVP content and audio
 

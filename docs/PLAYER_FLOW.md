@@ -1,6 +1,6 @@
 # First session, retention, and mobile UX
 
-M5 currently presents the shared phase and countdown plus the joining player's temporary Raid grace. The full first-session HUD, goal card, touch-first interaction, onboarding, and accessibility acceptance remain M8 work; the schedule below is the locked target experience.
+M8 now presents the compact Scrap/income/slots HUD, shared phase countdown, one next-goal card, first-session theme choice, contextual station/raid actions, and small touch-first menus. Touch holds show a radial progress ring; rarity uses a name, icon, and color. These client controls only request actions—the server remains authoritative. The schedule below is the locked target experience. Roblox Studio phone and multiplayer checks are still pending; M9 will add the locked sound cues while keeping their important moments visible as captions.
 
 ## First 10 minutes
 
@@ -10,7 +10,7 @@ The timestamps below describe a new player entering a fresh server. A player joi
 | --- | --- |
 | 0:00 | Spawn directly at an assigned 22 by 18 stud base. The player sees 50 Scrap, a Mossling producing 40 Scrap/min, two slots, and the Welcome Capsule price. |
 | 0:00–0:20 | One sentence explains the loop: “Mutate your oddling, add more, and when the siren hits, steal one and bring it home.” The player chooses Ember, Prism, or Moss. |
-| By 0:30 | A short, skippable guided interaction consumes the free chosen catalyst and applies a guaranteed Common mutation to the Mossling. It now earns 50 Scrap/min. No forced wait or wall of text. |
+| By 0:30 | A short guided interaction can apply a guaranteed Common mutation to the Mossling, which then earns 50 Scrap/min. Players can skip its guidance and continue toward the Welcome Capsule; the free mutation remains available at the glowing station. No forced wait or wall of text. |
 | 0:30–1:30 | A single goal card says to visit the capsule kiosk. The player can walk through the commons, inspect visible neighboring creatures, and see Scrap accumulate automatically. |
 | About 1:30 | 120 Scrap is available. The Welcome Capsule guarantees one Uncommon species. The reveal displays its name, income, and rarity; the player places it in the second stand. |
 | 1:30–3:00 | The player sees the two-creature income rate and an optional mutation station prompt. At about minute 3, the player has roughly 194 Scrap and chooses between a 160 Scrap mutation roll and saving toward the 350 Scrap third slot. |
@@ -40,9 +40,9 @@ The 3:00 balance estimate assumes the Welcome Capsule's expected Uncommon income
 - One contextual prompt: interact, Steal, or Tag, depending on phase and distance.
 - Mutation and capsule panels show price, result odds, selected creature, and confirmation in one compact view.
 - No persistent inventory grid, scrolling shop, or manual collect button.
-- Primary controls are at least 52 pixels across. Hold duration is shown as a radial fill. Any hold can be canceled by moving away.
+- Primary controls are at least 52 pixels across. Hold duration is shown as a radial fill. Theft cancels when released early; bank/recovery progress resets after movement beyond the server's 0.5-stud stationary tolerance.
 - Tag is one large context button on mobile, and one keyboard action on desktop. It does not require aiming.
-- Rarity is conveyed with text, icon, and color. Captions/visual alerts cover important sound cues; reduced effects are supported.
+- Rarity is conveyed with text, icon, and color. Captions/visual alerts cover important sound cues. M8 introduces no sustained particles or camera effects; M9's content effects must retain a reduced-effects path.
 
 ## Sound and feedback schedule
 

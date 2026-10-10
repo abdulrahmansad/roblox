@@ -20,6 +20,9 @@ local connections = {}
 local screenGui: ScreenGui? = nil
 local phaseLabel: TextLabel? = nil
 local graceLabel: TextLabel? = nil
+local scrapLabel: TextLabel? = nil
+local incomeLabel: TextLabel? = nil
+local slotsLabel: TextLabel? = nil
 local started = false
 
 local function isFiniteNumber(value: any): boolean
@@ -58,11 +61,15 @@ local function ensureGui(playerGui: PlayerGui)
     frame.Name = "PhasePanel"
     frame.AnchorPoint = Vector2.new(0.5, 0)
     frame.Position = UDim2.new(0.5, 0, 0, 12)
-    frame.Size = UDim2.fromOffset(300, 58)
+    frame.Size = UDim2.new(1, -24, 0, 104)
     frame.BackgroundColor3 = Color3.fromRGB(21, 28, 40)
     frame.BackgroundTransparency = 0.08
     frame.BorderSizePixel = 0
     frame.Parent = gui
+
+    local sizeConstraint = Instance.new("UISizeConstraint")
+    sizeConstraint.MaxSize = Vector2.new(480, 104)
+    sizeConstraint.Parent = frame
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
@@ -75,15 +82,29 @@ local function ensureGui(playerGui: PlayerGui)
     stroke.Parent = frame
 
     phaseLabel =
-        createLabel(frame, "PhaseAndTimer", UDim2.fromOffset(8, 3), UDim2.new(1, -16, 0, 32))
+        createLabel(frame, "PhaseAndTimer", UDim2.fromOffset(8, 3), UDim2.new(1, -16, 0, 30))
     phaseLabel.Text = "CONNECTING TO RAID CLOCK"
     phaseLabel.TextSize = 18
 
     graceLabel =
-        createLabel(frame, "ArrivalGrace", UDim2.fromOffset(8, 34), UDim2.new(1, -16, 0, 18))
+        createLabel(frame, "ArrivalGrace", UDim2.fromOffset(8, 32), UDim2.new(1, -16, 0, 18))
     graceLabel.Text = ""
     graceLabel.TextColor3 = Color3.fromRGB(170, 229, 255)
     graceLabel.TextSize = 12
+
+    scrapLabel =
+        createLabel(frame, "ScrapStatus", UDim2.fromOffset(8, 57), UDim2.new(1 / 3, -8, 0, 36))
+    incomeLabel =
+        createLabel(frame, "IncomeStatus", UDim2.new(1 / 3, 0, 0, 57), UDim2.new(1 / 3, 0, 0, 36))
+    slotsLabel =
+        createLabel(frame, "SlotsStatus", UDim2.new(2 / 3, 0, 0, 57), UDim2.new(1 / 3, -8, 0, 36))
+    for _, label in { scrapLabel, incomeLabel, slotsLabel } do
+        label.TextSize = 13
+        label.TextWrapped = true
+    end
+    scrapLabel.Text = "SCRAP —"
+    incomeLabel.Text = "SCRAP/MIN —"
+    slotsLabel.Text = "SLOTS —"
 
     screenGui = gui
 end
@@ -226,6 +247,30 @@ function controller.start(): boolean
     return true
 end
 
+function controller.getGui(): ScreenGui?
+    return screenGui
+end
+
+function controller.setEconomyStatus(scrap: any, incomePerMinute: any, occupied: any, capacity: any)
+    if scrapLabel == nil or incomeLabel == nil or slotsLabel == nil then
+        return
+    end
+    local function displayNumber(value: any): string
+        if
+            type(value) ~= "number"
+            or value ~= value
+            or value == math.huge
+            or value == -math.huge
+        then
+            return "—"
+        end
+        return if value % 1 == 0 then string.format("%d", value) else string.format("%.1f", value)
+    end
+    scrapLabel.Text = "SCRAP  " .. displayNumber(scrap)
+    incomeLabel.Text = "SCRAP/MIN  " .. displayNumber(incomePerMinute)
+    slotsLabel.Text = "SLOTS  " .. displayNumber(occupied) .. "/" .. displayNumber(capacity)
+end
+
 function controller.stop()
     for _, connection in connections do
         connection:Disconnect()
@@ -237,6 +282,9 @@ function controller.stop()
     end
     phaseLabel = nil
     graceLabel = nil
+    scrapLabel = nil
+    incomeLabel = nil
+    slotsLabel = nil
     state = nil
     started = false
 end

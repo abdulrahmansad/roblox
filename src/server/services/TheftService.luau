@@ -137,6 +137,9 @@ function TheftService._emitState(self: any, attempt: any)
         creatureId = attempt.creature.id,
         serverTimeUnix = self._unixClock(),
     }
+    if attempt.state == "DROPPED" then
+        data.dropPosition = copyPosition(attempt.dropPosition)
+    end
     self:_emit(attempt.thiefUserId, Protocol.DomainEventNames.TheftStateChanged, data)
     self:_emit(attempt.ownerUserId, Protocol.DomainEventNames.TheftStateChanged, data)
 end
@@ -507,6 +510,15 @@ function TheftService.cancelTheft(
     end
     if attempt.state ~= "CHANNELING" then
         return nil, "Locked"
+    end
+    if self._clock() - attempt.channelStartedAt >= RaidConfig.THEFT_CHANNEL_SECONDS then
+        self:step(self._clock())
+        if attempt.state == "RETURNED" then
+            return { attemptId = attemptId, state = "Returned" }, nil
+        end
+        if attempt.state ~= "CHANNELING" then
+            return nil, "Locked"
+        end
     end
     self:_returnAttempt(attempt, "Cancelled")
     return { attemptId = attemptId, state = "Returned" }, nil

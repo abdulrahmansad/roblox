@@ -53,6 +53,7 @@ export type TheftStateChangedData = {
     ownerUserId: number,
     creatureId: string,
     serverTimeUnix: number,
+    dropPosition: { x: number, y: number, z: number }?,
 }
 
 local Protocol = {}
