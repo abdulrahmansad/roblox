@@ -15,7 +15,8 @@ The timestamps below describe a new player entering a fresh server. A player joi
 | 3:00–5:00 | The goal card changes to the chosen next step. Neighbor bases remain inspectable; no manual collection chore is added. |
 | 5:00–5:30 | First Warning. Gates open, siren and countdown begin, and the player can see nearby targets and return routes. |
 | 5:30–7:00 | First Raid. The player can attempt one theft, defend with Tag, or help interrupt a carrier. Theft remains optional; income continues. |
-| 7:00–8:00 | Resolution returns unfinished transfers, then a short result summary plays during Cooldown. |
+| 7:00–7:30 | Resolution returns unfinished transfers. At 7:30, the first Raid completes; the Welcome creature's temporary protection ends for a player who participated and is connected at that boundary. |
+| 7:30–8:00 | Cooldown shows a short result summary; the shared cycle returns to Peace at 8:00. |
 | 8:00–10:00 | Peace resumes. The player chooses another creature, mutation, or slot. At minute 10 in a fresh-server timeline, the next Warning is three minutes away, so the first session ends with a clear next goal. |
 
 The 3:00 balance estimate assumes the Welcome Capsule's expected Uncommon income: 5 Scrap remaining at 1:30 plus 1.5 minutes at 126 Scrap/min is about 194 Scrap. Species variation changes the exact amount.
@@ -51,6 +52,6 @@ Use brief cues for capsule acquired, machine start, mutation reveal, Rare-or-bet
 - **Phone player:** No precision clicking, inventory dragging, or aim-based defense. The chase uses contextual holds and a large Tag control.
 - **Three-minute player:** Has a mutation, a capsule, and a mutation-versus-slot decision.
 - **Ten-minute player:** Has completed one raid and can choose a concrete next goal.
-- **Player who lost a creature:** Keeps the protected Mossling, all earned Scrap, and all other creatures. One loss maximum per owner per raid; no currency loss. The loss can still feel bad and is the primary playtest risk.
+- **Player who lost a creature:** Keeps the protected Mossling, all earned Scrap, and all other creatures. The Welcome creature is protected through the player's first completed Raid; later losses are limited to one creature per owner per Raid, with no currency loss. The loss can still feel bad and is the primary playtest risk.
 - **Player who got a rare form:** Keeps the form on a visible stand, sees an exact rarity label, and gets a Mythic server announcement when equipped.
 - **Friends:** Can join the same server through Roblox, inspect bases, and help Tag a carrier. No special alliance or clan system is needed.

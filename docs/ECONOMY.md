@@ -17,13 +17,12 @@
 | Normal mutation | 100 Scrap + 1 catalyst | Catalyst costs 60 Scrap if purchased. |
 | Tutorial mutation | Free | One chosen catalyst is provided and consumed; guaranteed Common. |
 | Catalyst kiosk | 60 Scrap each | Three branch-bound types. |
-| Successful theft deposit | 1 chosen catalyst | Maximum one earned catalyst per player per raid. |
-| Successful defensive Tag | 1 chosen catalyst | Alternative to theft reward; same one-per-raid cap. |
+| Successful theft deposit | 1 chosen catalyst | Maximum one earned catalyst per thief per raid. |
 | Sell non-starter creature | 60 Scrap | Fixed return; the starter cannot be sold. |
 | Slot 3 | 350 Scrap | Requires two owned creatures. |
 | Slot 4 | 1,200 Scrap | Requires first raid complete and three owned creatures. |
 
-No action takes currency from a victim. Catalyst rewards do not stack with a purchase discount; each normal mutation still needs one matching catalyst.
+No action takes currency from a victim. A defensive Tag awards no catalyst; preventing the creature loss is its reward. Catalyst rewards do not stack with a purchase discount; each normal mutation still needs one matching catalyst.
 
 ## Progression model
 
@@ -33,7 +32,7 @@ The first decision is deliberately a tradeoff. Around minute 3, a player can spe
 
 ## Modeled snapshots
 
-These are planning estimates, not guaranteed acquisition times. They use the average species income for random capsules, assume no theft, no raid catalyst reward, and no normal mutation spending. The tutorial mutation is included. Pity and individual species rolls can move actual balances.
+These are planning estimates, not guaranteed acquisition times. They use the average species income for random capsules, assume no theft (and therefore no theft-deposit catalyst reward) and no normal mutation spending. The tutorial mutation is included. Capsule pity, Rare-or-better mutation pity, and individual species rolls can move actual balances.
 
 | Time | Modeled state | Expected unspent Scrap |
 | --- | --- | ---: |
@@ -58,5 +57,5 @@ The minute-30 balance is intentionally a spend-light model, not the ideal player
 - Standard capsule price stays at 120 while base income ranges from 36 to 120 Scrap/min. The 60 Scrap sale value is always below capsule cost.
 - Slot costs rise from 350 to 1,200 and are one-time, permanent sinks.
 - Mutation costs do not compound, and a creature can have only one active mutation.
-- The Mythic multiplier is powerful but constrained by 0.1% base odds and a 25-miss pity guarantee. It cannot be bought directly or boosted with Robux.
+- The Mythic multiplier is powerful but constrained by an exact 0.1% chance on every normal mutation roll. There is no Mythic pity or other odds boost; it cannot be bought directly or boosted with Robux.
 - Recheck this model with real playtest telemetry before release. Track time to first capsule, first standard mutation, Slot 3, Slot 4, average Scrap/min, loss/recovery rates, and the share of players who spend versus save.

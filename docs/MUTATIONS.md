@@ -12,7 +12,7 @@ There are three catalyst items, each bound to its matching mutation theme:
 
 A player chooses one catalyst at the start. The first guided mutation consumes it, costs no Scrap, and is guaranteed to produce one of that theme's four Common forms. Each Common has an equal 25% chance in the tutorial. This tutorial result does not affect pity.
 
-After the tutorial, a normal mutation costs 100 Scrap and one catalyst. A matching catalyst can be bought at the commons kiosk for 60 Scrap or earned as one chosen catalyst after one successful theft deposit or one successful defensive Tag. A player can earn at most one catalyst per raid, regardless of how many successful actions they make. Catalysts are items, not currencies.
+After the tutorial, a normal mutation costs 100 Scrap and one catalyst. A matching catalyst can be bought at the commons kiosk for 60 Scrap or earned as one chosen catalyst after a successful theft deposit. A player can earn at most one catalyst per raid from successful theft deposits. Tags never award catalysts, even when they successfully stop a theft. Catalysts are items, not currencies.
 
 The guaranteed Common tutorial is available immediately and takes about 20 seconds of optional guided interaction. It has no forced animation delay.
 
@@ -76,15 +76,14 @@ A player can have only one mutation transaction in progress. A second request wh
 
 ## Pity and fairness
 
-Normal mutation rolls have two persistent, server-owned pity counters shared across all three themes:
+Normal mutation rolls have one persistent, server-owned Rare-or-better pity counter shared across all three themes:
 
 - After 8 normal rolls without a Rare-or-better result, the next roll is at least Rare.
-- After 25 normal rolls without Mythic, the next roll is Mythic.
 
-A Rare resets the Rare-or-better counter. A Mythic resets both counters. Any result below Rare increments the Rare-or-better counter; any result below Mythic increments the Mythic counter. Pity applies to the next roll after the stated number of misses. The free tutorial roll is excluded. The station shows the current counters and the exact result odds. No Robux purchase changes odds or pity.
+A Rare or Mythic resets the Rare-or-better counter; any result below Rare increments it. A Mythic has a 0.1% base chance on every normal mutation roll, including when Rare-or-better pity is active. When the Rare-or-better guarantee is active, the next-roll odds are 99.9% Rare and 0.1% Mythic; otherwise the normal odds in the table apply. The guarantee never adds a Mythic chance or changes the 0.1% Mythic chance. There is no Mythic pity, Mythic miss counter, or other mechanic that increases Mythic odds. The free tutorial roll is excluded. Before confirmation, the station shows the normal odds, current Rare-or-better pity state, and exact odds for the next roll. No Robux purchase changes odds or pity.
 
 ## Visual and audio treatment
 
 Every form uses a shared recipe across all 12 creatures: palette/material, one shared accessory or silhouette detail, and a lightweight effect. Common is clearly recolored; Uncommon adds an animated detail; Rare adds a restrained aura; Mythic adds a distinctive layered palette and aura. Effects do not change hitboxes, movement, or raid visibility.
 
-The player sees a theme-colored catalyst, odds, current pity, Scrap cost, and the exact creature affected before confirming. The reveal combines a short machine cue, a tier label, and a brief silhouette-to-form transition. A Mythic announcement goes to the server only after the player equips the Mythic, and it does not expose the player's base location.
+The player sees a theme-colored catalyst, normal odds, current Rare-or-better pity state, any active next-roll guarantee and its exact odds, Scrap cost, and the exact creature affected before confirming. The reveal combines a short machine cue, a tier label, and a brief silhouette-to-form transition. A Mythic announcement goes to the server only after the player equips the Mythic, and it does not expose the player's base location.

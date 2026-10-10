@@ -19,7 +19,7 @@ Income is measured in Scrap per minute before mutation. Each base species has on
 | Rare | Lantern Yak | Broad body, sweeping horns, lantern chest | 110 |
 | Rare | Pocket Hydra | Compact body with three small neck heads | 120 |
 
-The only starting species is Mossling. The starting Mossling instance is permanently protected from theft and sale. A Mossling acquired later is an ordinary creature.
+The only starting species is Mossling. The starting Mossling instance is permanently protected from theft and sale. A Mossling acquired later is an ordinary creature. The specific creature awarded by the Welcome Capsule is also protected from theft until the player's first completed Raid, as defined in [RAIDS.md](RAIDS.md); this temporary rule does not protect Scrap or any other creature.
 
 ## Acquisition and capsule odds
 

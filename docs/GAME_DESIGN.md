@@ -19,7 +19,7 @@ Income is automatic while online. There is no manual collection, offline income,
 1. A new player can explain the goal after one sentence and the first guided mutation.
 2. The first capsule is reachable in about 90 seconds and the first raid begins in the first session.
 3. Other players create stories through theft and interception; combat is limited to one short Tag action.
-4. Collection value is visible from outside a base, while a permanent starter creature protects a newcomer from losing everything.
+4. Collection value is visible from outside a base; the permanent starter and temporary first-Raid Welcome protection keep early losses bounded.
 5. The complete gameplay progression is free. Paid content changes appearance only.
 6. The MVP uses a small set of reusable creature rigs and mutation recipes.
 
@@ -80,11 +80,11 @@ See [PLAYER_FLOW.md](PLAYER_FLOW.md) for the 10-minute onboarding and 2-, 5-, 10
 
 ## Included in V1
 
-- Assigned base, two starting slots, one protected starter creature, and one free guided Common mutation.
+- Assigned base, two starting slots, one permanently protected starter, temporary theft protection for the specific Welcome Capsule creature until the player's first completed Raid, and one free guided Common mutation.
 - One guaranteed-Uncommon Welcome Capsule, then repeatable Scrap capsules with visible odds and pity.
 - Twelve species, three catalyst themes, 24 mutation forms, one active mutation per creature.
 - Automatic online income and two permanent capacity upgrades.
-- One shared eight-minute raid cycle, one attempted theft per creature per raid, one successful theft per thief per raid, and at most one loss per owner per raid.
+- One shared eight-minute raid cycle, 15-second symmetric arrival grace for players who join during RAID, one attempted theft per creature per raid, one successful theft per thief per raid, and at most one loss per owner per raid.
 - One mobile-friendly Tag action, recovery window for dropped creatures, and deterministic return on interrupted transfers.
 - One compact map, the three map zones above, a small UI, and a 36-entry Codex.
 - One optional cosmetic Game Pass planned for launch; product setup and implementation are outside this planning phase.
@@ -92,6 +92,10 @@ See [PLAYER_FLOW.md](PLAYER_FLOW.md) for the 10-minute onboarding and 2-, 5-, 10
 ## Excluded from V1
 
 Trading, clans, guilds, bosses, quests, multiple worlds, rebirths, complex crafting, combat weapons, skill trees, battle passes, following pets, large inventories, offline income, multiple currencies, extra raid types, base-defense upgrades, paid slots, paid luck, paid speed, paid recovery, paid random rewards, and large-scale content drops.
+
+## Design freeze
+
+The V1 design is frozen after the final design corrections. Do not add systems or expand scope unless later playtest evidence demonstrates a specific need and a new design decision approves the change.
 
 ## Design review and decision
 

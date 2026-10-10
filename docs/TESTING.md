@@ -30,4 +30,13 @@ This engine-backed command was not run during bootstrap because Roblox Studio is
 - Monetization: receipt idempotency, duplicate/retried receipts, entitlement checks, and failure handling.
 - Studio multiplayer: two-player interaction and race tests, then 6–8 clients for join/leave and load behavior.
 
+### Planned V1 design regression coverage
+
+- Mutation odds: normal rolls use the documented table; Mythic remains exactly 0.1% on every normal roll, including a Rare-or-better pity roll. Across any 25 or more normal rolls without Mythic, no Mythic guarantee activates and no Mythic miss counter is stored. Verify the UI shows normal odds and exact conditional odds when Rare pity is active.
+- Welcome protection: only the saved `welcomeCreatureId` is protected, and only while `hasCompletedFirstRaid` is false. Verify the state survives disconnect/rejoin, remains active if the player is disconnected at the first Raid completion boundary, and ends at the RESOLUTION-to-COOLDOWN boundary for a connected participant.
+- Raid arrival grace: a RAID join receives 15 seconds from operational readiness, blocks both targeting that player's base and their outgoing theft, and leaves the shared timer unchanged. PEACE/WARNING joins receive no special grace. Reset, respawn, and rejoin in the same server Raid reuse the original timestamp.
+- Rewards: a successful Tag never grants a catalyst, including repeated or coordinated attempts. A successful theft deposit grants one chosen catalyst if the thief has not already earned one that Raid; duplicate/replayed requests do not grant another.
+
+These are future behavior tests for gameplay implementation; this design-only correction does not add runtime code or tests.
+
 Add tests alongside behavior; do not create always-pass placeholders.

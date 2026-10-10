@@ -1,6 +1,6 @@
 # Project status
 
-Status: development foundation initialized and the MVP game design is now locked. Gameplay implementation remains unstarted and is outside the scope of the design-only phase.
+Status: development foundation initialized. The final V1 design corrections are applied and the game design is frozen. Gameplay implementation remains unstarted and is outside the scope of the design-only phase.
 
 ## Design
 
