@@ -78,8 +78,8 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Non-goals:** Weapons, extra defenses, multi-item carry, currency theft, trading.
 - **Dependencies:** M3, M5, and PlayerDataService's durable marker fields from the V1 schema. M7 hardens recovery and migrations after these state writes exist.
 - **Player-visible result:** A player can make one risky creature run, defend with Tag, and recover a dropped creature.
-- **Tests:** Full theft and Tag matrix in `TESTING.md`, including races, locks, ownership, disconnections, phase end, timestamp tie, persistence fail/recovery, Welcome start participation, grace-expiry participation, disconnect after participation, late grace through Raid end, and offline completion finalization.
-- **Acceptance:** Server-only ownership; strict bank-before-end; attempts/limits exact; starter and active Welcome target protected; `firstRaidParticipation` persisted at qualification; reconnect cannot refresh grace or entitlement; at completion timestamp Welcome protection expires even while offline; no Tag catalyst.
+- **Tests:** Full theft and Tag matrix in `TESTING.md`, including races, locks, ownership, disconnections, phase end, timestamp tie, persistence fail/recovery, immediate participation at Raid start, grace-expiry participation, disconnect after participation, late grace through Raid end, post-completion Welcome claim, and offline completion finalization.
+- **Acceptance:** Server-only ownership; strict bank-before-end; attempts/limits exact; starter and active Welcome target protected; `firstRaidParticipation` is persisted idempotently at qualification and never replaced; reconnect cannot refresh grace or entitlement; at completion timestamp Welcome protection expires even while offline, and a later Welcome claim stays unprotected; no Tag catalyst.
 - **Docs:** `RAIDS.md`, `SECURITY.md`, `DATA_MODEL.md`, `STATE_MACHINES.md`, `NETWORK_PROTOCOL.md`, `ANALYTICS.md`, `TESTING.md`.
 - **Commit boundary:** One theft/Tag commit with transfer journal integration and required race tests.
 

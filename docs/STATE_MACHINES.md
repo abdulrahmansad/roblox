@@ -56,10 +56,10 @@ PROTECTED → PARTICIPATING_IN_FIRST_RAID → EXPIRED
 ```
 
 - `PROTECTED` means `welcomeCreatureId` is set and `hasCompletedFirstRaid` is false. The starter Mossling has separate permanent protection.
-- PEACE/WARNING cannot consume protection. When RAID begins, immediately transition every player already present in the server to `PARTICIPATING_IN_FIRST_RAID` and persist `{raidId, completesAtUnix}`; character/base initialization does not defer this marker.
+- PEACE/WARNING cannot consume protection. At RAID start, immediately mark each player already present whose `hasCompletedFirstRaid` is false and who has no participation marker; character/base initialization does not defer this marker. The write is idempotent and never replaces a marker.
 - A player joining during RAID starts one 15-second arrival grace when both character and base are operational. If that original timestamp expires strictly before RAID-to-RESOLUTION, transition to participation then and persist the current Raid ID and scheduled RESOLUTION-to-COOLDOWN timestamp. Otherwise that Raid does not consume protection.
 - Respawn, reset, disconnect, and rejoin cannot restart grace or erase participation. Rejoining before the marker deadline reuses the same marker. A marker is never created by PEACE/WARNING or a late join whose grace reaches/passes RAID end.
-- At the marker's completion timestamp, set `hasCompletedFirstRaid = true`, clear the marker, and transition to `EXPIRED`. If the player is offline, profile load at or after the timestamp performs the same idempotent transition before gameplay. Disconnect after participation does not preserve protection.
+- At the marker's scheduled RESOLUTION-to-COOLDOWN boundary, set `hasCompletedFirstRaid = true`, clear the matching marker, and transition to `EXPIRED`. `RaidService` owns eligibility and the shared boundary; `PlayerDataService` owns the profile write. If the player is offline, profile load at or after the timestamp performs the same idempotent transition before gameplay. Disconnect after participation does not preserve protection.
 - If no Welcome creature exists when the first Raid completes, the completion still stands; a Welcome Capsule claimed later is not protected by a completed first Raid. The protection marker never affects another creature.
 
 ## Ownership and failure rule

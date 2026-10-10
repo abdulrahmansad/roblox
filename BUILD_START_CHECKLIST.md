@@ -1,24 +1,31 @@
-# Build progress checklist
+# Build start checklist
 
-V1 implementation is underway. This checklist tracks the original build gates and current milestone state; it does not claim release readiness.
+V1 pre-build readiness review is complete. M1 and M2 foundation code is already committed; this readiness phase changes documentation only. The implementation branch is ready to resume at M3 after the documented Studio-only M0/M1/M2 checks are completed.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| V1 design frozen | **PASS** | [GAME_DESIGN.md](docs/GAME_DESIGN.md) and approved V1 scope. |
-| Welcome protection rule locked | **PASS** | [RAIDS.md](docs/RAIDS.md), [DATA_MODEL.md](docs/DATA_MODEL.md). |
-| Architecture, data, network, state machines | **PASS — SPECIFICATION** | [ARCHITECTURE.md](docs/ARCHITECTURE.md), [DATA_MODEL.md](docs/DATA_MODEL.md), [NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md), [STATE_MACHINES.md](docs/STATE_MACHINES.md). Runtime implementations are still pending by milestone. |
-| Test matrix and M0–M12 plan | **PASS — SPECIFICATION** | [TESTING.md](docs/TESTING.md), [MILESTONES.md](docs/MILESTONES.md). |
-| M0 CLI verification | **PASS** | Pinned tools match; `./scripts/verify.ps1` passes; `./scripts/serve.ps1` listens on `localhost:34872` and returns HTTP 200. |
-| M0 Studio/plugin/two-client smoke | **BLOCKED** | Roblox Studio is not installed; sign-in and Rojo plugin connection cannot be checked. |
-| M1 session/base implementation | **CODE PASS; STUDIO PENDING** | Eight-base assignment, character relocation, session cleanup, phase snapshot inheritance; portable tests and Rojo build pass. |
-| M2 starter/profile/online income | **CODE PASS; STUDIO PENDING** | Schema, DataStore session lease, retries, and income implemented; fake-store tests pass. Live DataStore/API-services check remains. |
-| M3–M12 | **NOT STARTED** | See current milestone and remaining work in [PROJECT_STATUS.md](docs/PROJECT_STATUS.md). |
-| Git | **PASS AFTER M2 PUSH** | M1 is pushed; M2 is committed to `main`, pushed to the configured origin, and local `main` matches remote. |
+| V1 design frozen | **PASS** | [GAME_DESIGN.md](docs/GAME_DESIGN.md) marks the approved V1 specification as frozen. |
+| Final Welcome protection correction | **PASS** | [RAIDS.md](docs/RAIDS.md), [DATA_MODEL.md](docs/DATA_MODEL.md), [STATE_MACHINES.md](docs/STATE_MACHINES.md), and [SECURITY.md](docs/SECURITY.md) define the durable first-participation marker and strict grace boundary. |
+| Architecture locked | **PASS — SPECIFICATION** | [ARCHITECTURE.md](docs/ARCHITECTURE.md) assigns server services, shared contracts, and presentation-only client controllers. |
+| Data model locked | **PASS — SPECIFICATION** | [DATA_MODEL.md](docs/DATA_MODEL.md) specifies schema, defaults, migrations, validation, corruption handling, and runtime-only state. |
+| Network protocol locked | **PASS — SPECIFICATION** | [NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md) defines actions, payloads, phases, validation, throttles, idempotency, events, and errors. |
+| State machines locked | **PASS — SPECIFICATION** | [STATE_MACHINES.md](docs/STATE_MACHINES.md) defines Raid, theft, mutation, and Welcome protection transitions. |
+| Test matrix ready | **PASS — SPECIFICATION** | [TESTING.md](docs/TESTING.md) covers capsule, mutation, Raid, Welcome protection, theft, Tag, persistence, protocol, Studio, and monetization. |
+| M0–M12 ready | **PASS — SPECIFICATION** | [MILESTONES.md](docs/MILESTONES.md) defines scope, non-goals, dependencies, results, tests, acceptance, docs, and commit boundaries. |
+| Toolchain | **PASS** | Pinned tools match; `./scripts/verify.ps1` passes format, lint (0 warnings/errors), 24 portable tests, and Rojo build. PowerShell scripts and pinned versions were checked. No skill-specific validator is supplied in the repository. |
+| Rojo configuration/build | **PASS** | `default.project.json` builds successfully. |
+| Rojo serve workflow | **PASS** | `./scripts/serve.ps1` served `127.0.0.1:34872` with HTTP 200; the process was stopped after checking. Connection and two-client steps are documented in [tests/multiplayer/README.md](tests/multiplayer/README.md). |
+| Studio status | **KNOWN — HUMAN CHECK PENDING** | Roblox Studio is not installed in the inspected locations; sign-in cannot be checked and the Rojo plugin cannot be verified. No Studio success is claimed. |
+| Existing M1/M2 implementation | **PORTABLE PASS; STUDIO PENDING** | Session/base, profile persistence, and online income are committed on `main`; engine-backed and live DataStore checks remain pending. |
+| M3–M12 | **READY TO IMPLEMENT; NOT ON `main`** | Milestones are specified; no later milestone is included in the branch. |
+| Git | **PASS AFTER READINESS PUSH** | `main` points to `abdulrahmansad/roblox`; the readiness commit must be pushed and verified against `origin/main` before marking synchronized. |
 
-## Remaining human action
+The pre-existing uncommitted M3 work was preserved in the local stash `paused M3 gameplay during pre-build readiness`; it is excluded from `main` and from this readiness commit.
 
-Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect to `localhost:34872`, and run the documented M0/M1 two-client smoke and M2 live DataStore/leaderboard checks. These Studio-dependent acceptance items remain pending while independent milestones continue.
+## Human-only action
 
-## Current verdict
+Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke and the M1/M2 Studio checks in [tests/multiplayer/README.md](tests/multiplayer/README.md), including live DataStore/API-services and leaderboard behavior.
 
-**BUILD IN PROGRESS — NOT READY** for a complete playable V1. M1 and M2 have portable local evidence; Studio validation and M3–M12 remain.
+## Verdict
+
+**READY TO BUILD** — the design and implementation contracts are locked, portable checks pass, and the remaining Studio-only step is explicit.

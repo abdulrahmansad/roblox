@@ -1,14 +1,18 @@
 # Project status
 
-Status: M2 starter/profile/online-income code is implemented and passes local verification. M0 Studio validation, M1 Studio join/leave validation, and M2 live DataStore/leaderboard validation remain pending because Roblox Studio is not installed. Continue with M3 after the M2 commit is pushed; no Studio integration is claimed.
+Status: V1 pre-build readiness is complete. The design, protection correction, architecture, data model, network contract, state machines, tests, and M0–M12 plan are locked. M1/M2 foundation code is already committed; M3–M12 are not implemented on `main`. This readiness pass made documentation changes only. M0 Studio validation, M1 Studio join/leave validation, and M2 live DataStore/leaderboard validation remain pending because Roblox Studio is not installed. No Studio integration is claimed.
 
-## Current milestone
+## Readiness status
 
-**M2 — Starter and online income**
+**READY TO BUILD — resume implementation at M3 after the human-only Studio checks.**
+
+- V1 is explicitly frozen in [GAME_DESIGN.md](GAME_DESIGN.md). The Welcome creature's first-Raid protection uses `welcomeCreatureId`, `hasCompletedFirstRaid`, and a durable `firstRaidParticipation` marker; see [DATA_MODEL.md](DATA_MODEL.md) and [STATE_MACHINES.md](STATE_MACHINES.md).
+- Architecture, schema, protocol, state-machine, test-matrix, and milestone specifications are complete. See [BUILD_START_CHECKLIST.md](../BUILD_START_CHECKLIST.md) for gate evidence and the one remaining human action.
+- The latest completed implementation milestone is **M2 — Starter and online income**.
 
 - Implemented: full version-1 profile defaults and strict validation; atomic DataStore session lease in key metadata; bounded retries; autosave, leave save, and shutdown save; stable starter ID; exact 40 Scrap/min Mossling rate; 10-second online payouts with runtime fractional carry; replicated leaderboard balance/rate.
 - Profile loading completes before a player receives a base. Lock conflicts, unknown schemas, invalid profiles, and exhausted DataStore retries reject the player without replacing saved data.
-- Portable verification: `./scripts/verify.ps1` passed formatting, Selene (0 errors/warnings), 24 Lune tests, and Rojo build.
+- Portable verification: `./scripts/verify.ps1` passed formatting, Selene (0 errors/warnings), 24 Lune tests, and Rojo build during this readiness review.
 - Studio two-client session smoke and live DataStore/API-services/leaderboard behavior: pending.
 
 ## Completed milestones
@@ -34,4 +38,4 @@ Roblox Studio is not detected in PATH, the expected LocalAppData/Program Files i
 
 ## Remaining implementation
 
-M3–M12 are not started. Remaining work includes capsules, mutations, timed Raid cycle, theft/Tag, analytics integration, onboarding/UI, art/map/audio content, hostile playtest, cosmetic pass, and release gates. M7 still needs migration, backup/quarantine recovery, and transaction journals. No Studio-based performance, mobile, security, or multiplayer claim is made.
+M3–M12 are not implemented on `main`. Remaining work includes capsules, mutations, timed Raid cycle, theft/Tag, analytics integration, onboarding/UI, art/map/audio content, hostile playtest, cosmetic pass, and release gates. M7 still needs migration, backup/quarantine recovery, and transaction journals. No Studio-based performance, mobile, security, or multiplayer claim is made.

@@ -4,6 +4,8 @@
 
 This is the approved game design for the first playable release. It is a planning document; it does not authorize gameplay implementation.
 
+**V1 DESIGN FROZEN.** This document and its linked planning documents are the approved implementation specification. Any scope change requires a new explicit design decision.
+
 Oddlings: Mutation Run is a small, eight-player Roblox game about collecting strange creatures, mutating them into showpiece forms, earning Scrap, and making a risky run into another player's base during short, predictable raids.
 
 The promise is simple: build a creature collection that is visibly yours, then decide whether to improve it or risk a raid for someone else's.
