@@ -21,7 +21,7 @@ Status: V1 implementation is in progress; **M5 — Raid state and arrival grace*
 - **M2 — Starter and online income:** validated profile defaults and persistence adapter, session lock/save/retry coverage, stable starter, exact 40 Scrap/min income, online-only 10-second payouts with fractional carry, and leaderboard values. Portable checks pass; live DataStore and Studio checks are pending.
 - **M3 — Capsules, sales, and capacity:** portable implementation and verification pass as described above; Studio check pending. Commit `10a4f4846c79d89fbe13424abcaffb93f7f0e273` is pushed to `origin/main`.
 - **M4 — Mutations:** portable implementation and verification pass; Studio mutation-station checks remain pending. Commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is pushed to `origin/main`.
-- **M5 — Raid state and arrival grace:** portable implementation and verification pass. Exact phase timing, Raid IDs, phase snapshots/events, countdown presentation, operational-readiness grace, and reset/rejoin behavior are covered; Studio phase presentation and multiplayer checks remain pending.
+- **M5 — Raid state and arrival grace:** portable implementation and verification pass. Exact phase timing, Raid IDs, phase snapshots/events, countdown presentation, operational-readiness grace, and reset/rejoin behavior are covered; Studio phase presentation and multiplayer checks remain pending. Commit `f28a7165fcb9cc55291f5fb1dfc6118ca6752032` is pushed.
 
 ## Locked planning contracts
 
@@ -41,4 +41,4 @@ M6–M12 remain: theft/Tag/recovery and Welcome transitions, persistence hardeni
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M5 is being closed as a focused commit and will be pushed after verification. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M5 commit `f28a7165fcb9cc55291f5fb1dfc6118ca6752032` is included on `main`; the branch is synchronized with `origin/main`. Historical M3 backup copies remain in the local stashes.

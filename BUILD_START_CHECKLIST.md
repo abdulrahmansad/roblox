@@ -1,6 +1,6 @@
 # Build start checklist
 
-V1 pre-build readiness is complete, and the V1 build is in progress. M1–M5 are implemented and locally verified; M5 is being closed as a focused commit and M6 is next. Studio checks remain pending.
+V1 pre-build readiness is complete, and the V1 build is in progress. M1–M5 are implemented, locally verified, committed, and pushed; M6 is next. Studio checks remain pending.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ V1 pre-build readiness is complete, and the V1 build is in progress. M1–M5 are
 | M4 | **PORTABLE PASS; STUDIO PENDING** | Its 48-test acceptance run passed; those regression cases remain in the current 56-test suite. Studio station checks remain pending. |
 | M5 | **PORTABLE PASS; STUDIO PENDING** | Exact Raid clock, phase snapshots/events, join grace, expiry and reset/rejoin checks pass; Studio presentation and multiplayer checks remain pending. |
 | M6–M12 | **READY TO IMPLEMENT** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
-| Git | **M5 COMMIT PENDING** | `main` and `origin/main` were synchronized before M5; push follows focused commit and final verification. |
+| Git | **PASS — SYNCHRONIZED** | M5 commit `f28a7165fcb9cc55291f5fb1dfc6118ca6752032` is pushed; `main` and `origin/main` match. |
 
 Historical copies of the paused M3 work remain in local stashes after the M3 implementation was committed.
 
