@@ -25,7 +25,7 @@ Status: V1 implementation is in progress; **M7 — Persistence hardening** has p
 - **M4 — Mutations:** portable implementation and verification pass; Studio mutation-station checks remain pending. Commit `476f060937a3b39a4bc36f1ebb05c639a71f96da` is pushed to `origin/main`.
 - **M5 — Raid state and arrival grace:** portable implementation and verification pass. Exact phase timing, Raid IDs, phase snapshots/events, countdown presentation, operational-readiness grace, and reset/rejoin behavior are covered; Studio phase presentation and multiplayer checks remain pending. Commit `f28a7165fcb9cc55291f5fb1dfc6118ca6752032` is pushed.
 - **M6 — Theft, Tag, recovery, and Welcome protection:** portable implementation passed 70 tests with formatting, lint, and Rojo build green. Coverage includes server-side holds/range, locks and limits, Tag/drop/recovery, Welcome participation and protection, strict Raid-end banking, transient/ambiguous journal responses, and ActionService replay. Studio multiplayer remains pending; no live Roblox DataStore claim is made. Commit `20586f9dc2db59c367a3222e8892cc891a1a6d8c` is pushed.
-- **M7 — Persistence hardening:** portable implementation passes 81 tests with formatting, lint, and Rojo build green. Coverage includes profile retries, revisioned backup/quarantine recovery, stale-backup rejection, future-version rejection, bounded transfer journal, PREPARED/COMMITTED replay, and shutdown during normal ownership, carry, and ambiguous bank commit. No earlier production schema exists under the locked version-1 data model, so no synthetic migration was created. Studio and live DataStore integration remain pending.
+- **M7 — Persistence hardening:** portable implementation passes 81 tests with formatting, lint, and Rojo build green. Coverage includes profile retries, revisioned backup/quarantine recovery, stale-backup rejection, future-version rejection, bounded transfer journal, PREPARED/COMMITTED replay, and shutdown during normal ownership, carry, and ambiguous bank commit. No earlier production schema exists under the locked version-1 data model, so no synthetic migration was created. Studio and live DataStore integration remain pending. Commit `683ec476c7ad5e8eb9240057170bb2427ad07247` is pushed.
 
 ## Locked planning contracts
 
@@ -45,4 +45,4 @@ M8–M12 remain: mobile onboarding/UI, V1 map/content/audio, hostile playtest an
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M6 commit `20586f9dc2db59c367a3222e8892cc891a1a6d8c` is pushed. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. M7 commit `683ec476c7ad5e8eb9240057170bb2427ad07247` is pushed after M6 commit `20586f9dc2db59c367a3222e8892cc891a1a6d8c`. Historical M3 backup copies remain in the local stashes.
