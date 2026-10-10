@@ -19,7 +19,7 @@ Income is automatic while online. There is no manual collection, offline income,
 1. A new player can explain the goal after one sentence and the first guided mutation.
 2. The first capsule is reachable in about 90 seconds and the first raid begins in the first session.
 3. Other players create stories through theft and interception; combat is limited to one short Tag action.
-4. Collection value is visible from outside a base; the permanent starter and temporary first-Raid Welcome protection keep early losses bounded.
+4. Collection value is visible from outside a base; the permanent starter and temporary Welcome protection through the first participated Raid keep early losses bounded.
 5. The complete gameplay progression is free. Paid content changes appearance only.
 6. The MVP uses a small set of reusable creature rigs and mutation recipes.
 
@@ -80,7 +80,7 @@ See [PLAYER_FLOW.md](PLAYER_FLOW.md) for the 10-minute onboarding and 2-, 5-, 10
 
 ## Included in V1
 
-- Assigned base, two starting slots, one permanently protected starter, temporary theft protection for the specific Welcome Capsule creature until the player's first completed Raid, and one free guided Common mutation.
+- Assigned base, two starting slots, one permanently protected starter, temporary theft protection for the specific Welcome Capsule creature until the first Raid in which the player participates completes, and one free guided Common mutation.
 - One guaranteed-Uncommon Welcome Capsule, then repeatable Scrap capsules with visible odds and pity.
 - Twelve species, three catalyst themes, 24 mutation forms, one active mutation per creature.
 - Automatic online income and two permanent capacity upgrades.

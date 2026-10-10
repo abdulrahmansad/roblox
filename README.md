@@ -36,7 +36,7 @@ In Studio, open a baseplate or place, install the official Rojo 7 plugin from th
 - `src/server`: server bootstrap, services, security, and future persistence boundaries.
 - `src/client`: client bootstrap and presentation-only code.
 - `tests`: portable unit/integration/security tests and Studio multiplayer test plans.
-- `docs`: locked game design, creature roster, mutations, raids, economy, monetization, player flow, MVP milestones, architecture, security, analytics, tooling, testing, and status.
+- `docs`: locked game design, creature roster, mutations, raids, economy, monetization, player flow, architecture, profile schema, network protocol, state machines, M0–M12 milestones, security, analytics, tooling, testing, and status. [BUILD_START_CHECKLIST.md](BUILD_START_CHECKLIST.md) records readiness gates.
 - `DevPackages`: Wally-generated development packages; ignored by Git and mapped to `ServerStorage`.
 - `build`: generated place files; ignored by Git.
 

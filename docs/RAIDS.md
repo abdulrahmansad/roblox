@@ -18,7 +18,7 @@ All bases are visible. During Warning, gates open and the siren gives everyone 3
 
 ### Arrival grace for players joining during RAID
 
-A player who joins while the shared phase is RAID receives 15 seconds of server-owned arrival grace, starting when both their character and assigned base are operational. Until the timestamp expires, that player's base cannot be targeted and that player cannot initiate a theft. The grace ends at the earlier of its 15-second expiry or the end of the current RAID; it does not change the shared phase timer or continue into a later RAID. Joining during PEACE or WARNING gives no special grace.
+A player who joins while the shared phase is RAID receives 15 seconds of server-owned arrival grace, starting when both their character and assigned base are operational. Until the timestamp expires, that player's base cannot be targeted and that player cannot initiate a theft. The grace is effective only during the RAID phase and does not change the shared phase timer or continue into a later RAID. Joining during PEACE or WARNING gives no special grace. If the timestamp expires before the RAID-to-RESOLUTION transition, the player begins participating in that Raid at expiry. If it expires at or after that transition, the player does not participate in that Raid; grace lasting through the RAID phase therefore cannot consume first-Raid protection.
 
 The server records the original grace timestamp per user and current Raid ID. A respawn, reset, disconnect, or rejoin to the same server during that Raid reuses the original timestamp and never refreshes the grace. The server checks this timestamp for both target eligibility and theft initiation; client clocks and client claims do not affect it.
 
@@ -26,14 +26,14 @@ The server records the original grace timestamp per user and current Raid ID. A 
 
 - Only a non-starter creature owned by a player still in the server can be targeted.
 - Scrap, catalysts, slot upgrades, and mutations are never removed from the victim.
-- The starting Mossling instance can never be targeted, sold, or transferred. The specific creature awarded by the Welcome Capsule cannot be targeted until the owner's first completed Raid; all other creatures remain eligible under the normal raid rules.
+- The starting Mossling instance can never be targeted, sold, or transferred. The specific creature awarded by the Welcome Capsule cannot be targeted until the owner's first participated Raid completes; all other creatures remain eligible under the normal raid rules.
 - One owner can lose at most one creature per raid. When a valid pickup channel begins, the server locks that owner's base until the attempt is canceled, the creature is returned, or the bank completes. Another thief cannot start from that owner while the lock is held.
 - Each thief may attempt up to two different creatures per raid, but may bank only one. This allows one retry after a defended attempt without enabling repeated harassment.
 - A thief needs one free slot. That slot is reserved when the theft attempt begins.
 - A creature can be attempted at most once per raid. A failed or interrupted attempt closes that creature for the rest of the raid.
 - The thief can carry only one creature. The owner retains ownership until the thief completes the bank interaction.
 
-The player's first Raid is complete at the shared transition from RESOLUTION to COOLDOWN, after unfinished transfers have returned. A Raid counts as a player's first only if their character and base were operational during that RAID and they are connected when it completes. Welcome protection ends at that boundary. If the player is disconnected at the boundary, keep `hasCompletedFirstRaid = false` and the Welcome creature protected; rejoining before that boundary can still complete the Raid if they are operational and connected when it occurs. Protection is tied to the Welcome Capsule creature's unique ID; it never protects Scrap or another creature. The permanently protected starter rule remains separate.
+The player's first Raid is complete at the shared transition from RESOLUTION to COOLDOWN, after unfinished transfers have returned. A player already present in the server when RAID begins participates immediately. A player joining during RAID participates only if their original 15-second arrival-grace timestamp expires strictly before RAID transitions to RESOLUTION. Record participation immediately with the Raid ID and its scheduled RESOLUTION-to-COOLDOWN completion timestamp. At that completion boundary, set `hasCompletedFirstRaid = true` and expire protection for the matching Welcome creature even if the player disconnected after participating. Rejoining cannot erase or replace a recorded participation marker. If the player joins so late that their grace expires at or after the RAID-to-RESOLUTION transition, that Raid does not consume the protection. PEACE and WARNING never consume it. Protection is tied to the Welcome Capsule creature's unique ID; it never protects Scrap or another creature. The permanently protected starter rule remains separate.
 
 ## Theft sequence
 
@@ -76,12 +76,15 @@ An attacker who is Tagged has used one of their two attempts. They may try a dif
 | Player joins during RAID | Base and character become operational; the server starts a 15-second grace that blocks targeting their base and their own theft attempts. The shared timer does not reset. |
 | Player joins during PEACE or WARNING | Base is assigned and the shared phase is inherited; no special arrival grace is granted. |
 | Player respawns, resets, or rejoins during the same RAID | The server reuses the original user/Raid-ID grace timestamp; it cannot refresh. |
-| Player is disconnected at their first Raid completion boundary | Persist `hasCompletedFirstRaid = false` and their `welcomeCreatureId`; the Welcome creature stays protected on return. |
-| Player's first Raid reaches COOLDOWN | After RESOLUTION, mark the connected participant's first Raid complete and end protection for the matching Welcome creature. |
+| Player becomes a first-Raid participant, then disconnects before completion | Persist `firstRaidParticipation` with that Raid ID and scheduled completion timestamp; disconnect does not restore or extend protection. |
+| Participated Raid reaches COOLDOWN while player is offline | Set completion when the profile is next loaded if the saved completion timestamp has passed; protection does not survive the participated Raid. |
+| Player joins during RAID; grace expires before RAID transitions to RESOLUTION | Begin participation at the original grace expiry and persist the Raid ID and completion timestamp. |
+| Player joins so late that grace lasts through RAID-to-RESOLUTION | Do not mark participation for that Raid; the Welcome protection remains for a later eligible Raid. |
+| Player joins during PEACE or WARNING | Base is assigned and the shared phase is inherited; no special arrival grace is granted. These phases do not consume Welcome protection. |
 | Latency or malformed remote payload | Server phase, ownership, proximity, capacity, rate limits, and request IDs decide the outcome. Client claims have no authority. |
 
 Income continues during raids and is never stolen. A completed bank moves the creature and its future income permanently; the former owner keeps all Scrap already earned. No currency is dropped or lost.
 
 ## Exploit-sensitive boundaries
 
-The server owns phase transitions, Scrap, ownership, target locks, carrier state, Tag cooldowns, arrival-grace timestamps, Welcome protection state, pity/rewards, and transfer commits. Client prompts are presentation only. Every action checks player identity, phase, ownership, creature instance ID, distance, capacity, cooldown, request rate, grace eligibility, and idempotency. A transfer is a single atomic state change; failed persistence must roll back or reconcile without duplication. A successful theft deposit grants its thief one chosen catalyst if they have not already earned a catalyst that Raid; Tag never awards one.
+The server owns phase transitions, Scrap, ownership, target locks, carrier state, Tag cooldowns, arrival-grace timestamps, Welcome protection state, pity/rewards, and transfer commits. Client prompts are presentation only. Every action checks player identity, phase, ownership, creature instance ID, distance, capacity, cooldown, request rate, grace eligibility, and idempotency. A transfer is a single atomic state change; failed persistence must roll back or reconcile without duplication. A successful theft deposit grants its thief one chosen catalyst if they have not already earned a catalyst that Raid; Tag never awards one. See [STATE_MACHINES.md](STATE_MACHINES.md) and [DATA_MODEL.md](DATA_MODEL.md) for the locked lifecycle and persisted marker contract.

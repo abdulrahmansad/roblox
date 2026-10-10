@@ -19,7 +19,7 @@ Income is measured in Scrap per minute before mutation. Each base species has on
 | Rare | Lantern Yak | Broad body, sweeping horns, lantern chest | 110 |
 | Rare | Pocket Hydra | Compact body with three small neck heads | 120 |
 
-The only starting species is Mossling. The starting Mossling instance is permanently protected from theft and sale. A Mossling acquired later is an ordinary creature. The specific creature awarded by the Welcome Capsule is also protected from theft until the player's first completed Raid, as defined in [RAIDS.md](RAIDS.md); this temporary rule does not protect Scrap or any other creature.
+The only starting species is Mossling. The starting Mossling instance is permanently protected from theft and sale. A Mossling acquired later is an ordinary creature. The specific creature awarded by the Welcome Capsule is also protected from theft until the first Raid in which the player participates completes, as defined in [RAIDS.md](RAIDS.md); disconnecting after participation does not extend protection, and a late join whose grace lasts through the RAID phase does not consume it. This temporary rule does not protect Scrap or any other creature.
 
 ## Acquisition and capsule odds
 
@@ -44,7 +44,7 @@ Players begin with 2 slots and may permanently buy:
 | Upgrade | Cost | Unlock condition | Result |
 | --- | ---: | --- | --- |
 | Slot 3 | 350 Scrap | Own 2 creatures | Capacity becomes 3 |
-| Slot 4 | 1,200 Scrap | First raid has ended and own 3 creatures | Capacity becomes 4 |
+| Slot 4 | 1,200 Scrap | Player's first participated Raid has completed and they own 3 creatures | Capacity becomes 4 |
 
 There are no other base upgrades in V1. Slots are not purchasable with Robux.
 

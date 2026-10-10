@@ -4,4 +4,6 @@ Project CLI versions are pinned in `rokit.toml`: Rojo 7.7.1, Wally 0.3.2, StyLua
 
 Wally's TestEZ 0.4.1 development dependency is locked in `wally.lock`; package source is generated into ignored `DevPackages/` and mapped only under server storage. Do not add runtime packages until a feature needs them.
 
-StyLua uses `stylua.toml`; Selene uses `selene.toml` and Roblox/TestEZ standard libraries. PowerShell scripts are the supported Windows command interface. Rojo Studio sync requires the matching Rojo 7 Studio plugin, installed from the official Rojo guide; no unrelated plugins are required.
+StyLua uses `stylua.toml`; Selene uses `selene.toml` and Roblox/TestEZ standard libraries. PowerShell scripts are the supported Windows command interface. Rojo Studio sync requires the matching Rojo 7 Studio plugin, installed from the official Rojo guide; no unrelated plugins are required. For the exact live-sync and two-client smoke steps, follow [tests/multiplayer/README.md](../tests/multiplayer/README.md).
+
+From the repository root, `./scripts/serve.ps1` runs `rojo serve default.project.json` at the Rojo default localhost endpoint (`127.0.0.1:34872`). Open the project in Studio, use the Rojo 7 plugin to connect to that endpoint, then use Studio's **Test > Server & Clients** mode for the documented two-client smoke. A successful CLI place build does not prove the Studio plugin connection or multiplayer session; record those separately.

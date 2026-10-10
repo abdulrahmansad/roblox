@@ -20,7 +20,7 @@
 | Successful theft deposit | 1 chosen catalyst | Maximum one earned catalyst per thief per raid. |
 | Sell non-starter creature | 60 Scrap | Fixed return; the starter cannot be sold. |
 | Slot 3 | 350 Scrap | Requires two owned creatures. |
-| Slot 4 | 1,200 Scrap | Requires first raid complete and three owned creatures. |
+| Slot 4 | 1,200 Scrap | Requires the player's first participated Raid to be complete and three owned creatures. |
 
 No action takes currency from a victim. A defensive Tag awards no catalyst; preventing the creature loss is its reward. Catalyst rewards do not stack with a purchase discount; each normal mutation still needs one matching catalyst.
 

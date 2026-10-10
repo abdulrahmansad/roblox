@@ -4,10 +4,20 @@ Roblox Studio's **Server & Clients** mode supports up to eight simulated clients
 
 Current manual smoke:
 
-1. Start Rojo and connect the Rojo 7 plugin.
-2. In Studio, choose **Server & Clients** with 2 clients and start a session.
-3. Confirm the server prints `[Foundation] Server initialized...` and each client prints that its ping was accepted.
-4. Exercise malformed payload rejection through a future test harness. Do not expose debug exploit controls to published clients.
+1. Open the Roblox place/project in Studio and sign in to the Roblox account used for development.
+2. From the repository root, run `./scripts/serve.ps1`; it serves `default.project.json` on `127.0.0.1:34872`.
+3. Open the Rojo 7 Studio plugin and connect to `localhost:34872`. Wait for sync to finish and check the Output window for sync errors.
+4. In Studio, choose **Test > Server & Clients**, set 2 clients, and start a session.
+5. Confirm the server prints `[Foundation] Server initialized...` and each client prints that its ping was accepted.
+6. In the Studio command bar with **Client** context selected, run:
+
+   ```lua
+   local ping = game:GetService("ReplicatedStorage").Network.DevPing
+   print(ping:InvokeServer({ requestId = "m0-valid" }))
+   print(ping:InvokeServer({ requestId = "m0-invalid", currency = 1 }))
+   ```
+
+   The first response must have `accepted = true`; the second must have `accepted = false` and reason `MalformedRequest`. Do not expose debug exploit controls to published clients.
 
 Roblox currently also documents `StudioTestService` for plugin-driven multiplayer test sessions, adding players mid-test, disconnecting clients, and ending a test from the server. Add an automated Studio plugin harness when gameplay scenarios exist; there is no gameplay to exercise yet.
 
