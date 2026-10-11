@@ -1303,6 +1303,28 @@ test("M8 HUD summarizes income, first-session goals, rarity labels, and action f
     expect(not HudModel.shouldDisplayContextAction(true, false, true))
     expect(not HudModel.shouldDisplayContextAction(true, true, false))
     expect(not HudModel.shouldDisplayContextAction(false, false, false))
+    expect(not HudModel.shouldShowHoldProgress("COMMONS"))
+    expect(not HudModel.shouldShowHoldProgress("TAG"))
+    expect(HudModel.shouldShowHoldProgress("STEAL"))
+    expect(HudModel.shouldShowHoldProgress("STEALING"))
+    expect(HudModel.shouldShowHoldProgress("CARRY_HOME", "RECOVER"))
+    local raidPresentationState = {
+        phase = "WARNING",
+        phaseStartedAtUnix = 400,
+        phaseEndsAtUnix = 430,
+        raidId = "raid-1",
+        revision = 2,
+        serverTimeUnix = 400,
+    }
+    expect(
+        HudModel.isSameRaidPresentationState(
+            raidPresentationState,
+            table.clone(raidPresentationState)
+        )
+    )
+    local refreshedRaidClock = table.clone(raidPresentationState)
+    refreshedRaidClock.serverTimeUnix = 401
+    expect(not HudModel.isSameRaidPresentationState(raidPresentationState, refreshedRaidClock))
     expect(HudModel.getToastOffsetY(true) == 306)
     expect(HudModel.getToastOffsetY(false) == 190)
 

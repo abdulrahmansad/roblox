@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Protocol = require(ReplicatedStorage:WaitForChild("Shared").network.Protocol)
+local HudModel = require(script.Parent.HudModel)
 local PLAYER_ATTRIBUTES = Protocol.PlayerAttributeNames
 
 local PHASES = {
@@ -142,23 +143,18 @@ local function readAttributes(player: Player)
     local raidId = player:GetAttribute(PLAYER_ATTRIBUTES.RaidId)
     local revision = player:GetAttribute(PLAYER_ATTRIBUTES.RaidRevision)
     local serverTimeUnix = player:GetAttribute(PLAYER_ATTRIBUTES.RaidServerTimeUnix)
-    if
-        state ~= nil
-        and state.phase == phase
-        and state.phaseStartedAtUnix == phaseStartedAtUnix
-        and state.phaseEndsAtUnix == phaseEndsAtUnix
-        and state.raidId == raidId
-        and state.revision == revision
-    then
-        return
-    end
-    setState({
+    local nextState = {
         phase = phase,
         phaseStartedAtUnix = phaseStartedAtUnix,
         phaseEndsAtUnix = phaseEndsAtUnix,
         raidId = raidId,
         revision = revision,
-    }, serverTimeUnix)
+        serverTimeUnix = serverTimeUnix,
+    }
+    if HudModel.isSameRaidPresentationState(state, nextState) then
+        return
+    end
+    setState(nextState, serverTimeUnix)
 end
 
 local function formatDuration(seconds: number): string

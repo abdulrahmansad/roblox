@@ -2185,6 +2185,12 @@ renderContext = function()
         return
     end
     contextButton.Visible = true
+    if contextProgress ~= nil then
+        contextProgress.Visible = HudModel.shouldShowHoldProgress(
+            currentContext.mode,
+            if contextHold ~= nil then contextHold.mode else nil
+        )
+    end
     if contextHold == nil then
         contextButton.Text = describeContext(currentContext)
     end

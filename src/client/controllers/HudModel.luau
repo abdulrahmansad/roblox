@@ -17,6 +17,7 @@ local HudModel = {}
 HudModel.MIN_TOUCH_TARGET_PX = 56
 local TOAST_INTRO_OFFSET_PX = 306
 local TOAST_NORMAL_OFFSET_PX = 190
+local HOLD_CONTEXT_MODES = { STEAL = true, BANK = true, RECOVER = true }
 
 local RARITIES = {
     Common = { icon = "●", color = "Common" },
@@ -103,6 +104,23 @@ function HudModel.shouldDisplayContextAction(
     introVisible: boolean
 ): boolean
     return contextAvailable and not menuOpen and not introVisible
+end
+
+function HudModel.shouldShowHoldProgress(contextMode: any, heldMode: any?): boolean
+    return HOLD_CONTEXT_MODES[contextMode] == true
+        or HOLD_CONTEXT_MODES[heldMode] == true
+        or contextMode == "STEALING"
+end
+
+function HudModel.isSameRaidPresentationState(current: any?, incoming: any): boolean
+    return type(current) == "table"
+        and type(incoming) == "table"
+        and current.phase == incoming.phase
+        and current.phaseStartedAtUnix == incoming.phaseStartedAtUnix
+        and current.phaseEndsAtUnix == incoming.phaseEndsAtUnix
+        and current.raidId == incoming.raidId
+        and current.revision == incoming.revision
+        and current.serverTimeUnix == incoming.serverTimeUnix
 end
 
 function HudModel.getToastOffsetY(introVisible: boolean): number
