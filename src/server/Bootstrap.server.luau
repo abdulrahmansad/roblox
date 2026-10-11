@@ -26,9 +26,26 @@ local StudioMemoryDataStoreService =
     require(ServerScriptService.Server.persistence.StudioMemoryDataStoreService)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
+local PlayerIdentity = require(ServerScriptService.Server.security.PlayerIdentity)
 local Telemetry = require(ServerScriptService.Server.analytics.Telemetry)
 
 assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match server capacity")
+local useStudioMemoryDataStore = StudioMemoryDataStoreService.isUnpublishedStudioSession(
+    RunService:IsStudio(),
+    game.PlaceId,
+    game.GameId
+)
+local function resolvePlayerUserId(player: Player): number?
+    return PlayerIdentity.resolve(player, useStudioMemoryDataStore)
+end
+local function findPlayerByUserId(userId: number): Player?
+    for _, player in Players:GetPlayers() do
+        if resolvePlayerUserId(player) == userId then
+            return player
+        end
+    end
+    return nil
+end
 local playerDataService: any = nil
 local theftService: any = nil
 local tagService: any = nil
@@ -50,7 +67,10 @@ local raidService = RaidService.new({
     getPlayerUserIds = function()
         local userIds = {}
         for _, player in Players:GetPlayers() do
-            table.insert(userIds, player.UserId)
+            local userId = resolvePlayerUserId(player)
+            if userId ~= nil then
+                table.insert(userIds, userId)
+            end
         end
         return userIds
     end,
@@ -77,15 +97,10 @@ local raidService = RaidService.new({
 local baseService = BaseService.new({
     baseCount = Constants.BASE_COUNT,
     world = Workspace,
+    resolveUserId = resolvePlayerUserId,
 })
 local dataStoreService: any = DataStoreService
-if
-    StudioMemoryDataStoreService.isUnpublishedStudioSession(
-        RunService:IsStudio(),
-        game.PlaceId,
-        game.GameId
-    )
-then
+if useStudioMemoryDataStore then
     dataStoreService = StudioMemoryDataStoreService.new()
     warn(
         "[Foundation] Unpublished Studio session uses volatile in-memory data; progress will not persist."
@@ -122,6 +137,7 @@ local creatureService = CreatureService.new({
 local economyService = EconomyService.new({
     playerDataService = playerDataService,
     creatureService = creatureService,
+    resolveUserId = resolvePlayerUserId,
     emitIncomeEvent = function(player, userId, amount, balance)
         emitAnalytics(userId, "scrap_earned", { source = "income", amount = amount })
         if domainEvent == nil or player.Parent ~= Players then
@@ -176,7 +192,7 @@ local mutationService = MutationService.new({
         return HttpService:GenerateGUID(false)
     end,
     emitEvent = function(userId, event, data, revision)
-        local player = Players:GetPlayerByUserId(userId)
+        local player = findPlayerByUserId(userId)
         if player ~= nil then
             pcall(function()
                 domainEvent:FireClient(player, {
@@ -196,7 +212,7 @@ theftService = TheftService.new({
     baseService = baseService,
     transferJournalStore = transferJournalStore,
     getPlayer = function(userId)
-        return Players:GetPlayerByUserId(userId)
+        return findPlayerByUserId(userId)
     end,
     generateAttemptId = function()
         return HttpService:GenerateGUID(false)
@@ -210,7 +226,7 @@ theftService = TheftService.new({
         task.spawn(callback)
     end,
     emitToUser = function(userId, event, data)
-        local player = Players:GetPlayerByUserId(userId)
+        local player = findPlayerByUserId(userId)
         if player ~= nil then
             pcall(function()
                 domainEvent:FireClient(player, {
@@ -228,14 +244,14 @@ tagService = TagService.new({
     raidService = raidService,
     theftService = theftService,
     getPlayer = function(userId)
-        return Players:GetPlayerByUserId(userId)
+        return findPlayerByUserId(userId)
     end,
     isOperational = function(player)
         return baseService:isOperational(player)
     end,
     clock = os.clock,
     emitToUser = function(userId, event, data)
-        local player = Players:GetPlayerByUserId(userId)
+        local player = findPlayerByUserId(userId)
         if player ~= nil then
             pcall(function()
                 domainEvent:FireClient(player, {
@@ -253,22 +269,32 @@ local actionService: any = nil
 local sessionService = SessionService.new({
     baseService = baseService,
     raidService = raidService,
-    loadProfile = function(player)
-        local loaded, reason = playerDataService:load(player.UserId)
+    resolveUserId = resolvePlayerUserId,
+    loadProfile = function(_player, userId)
+        if userId == nil then
+            return false, "InvalidPlayer"
+        end
+        local loaded, reason = playerDataService:load(userId)
         if not loaded then
             warn(string.format("[PlayerData] Load rejected: %s", tostring(reason)))
         end
         return loaded, reason
     end,
-    saveProfile = function(player)
-        local saved, reason = playerDataService:unload(player.UserId)
+    saveProfile = function(_player, userId)
+        if userId == nil then
+            return false, "InvalidPlayer"
+        end
+        local saved, reason = playerDataService:unload(userId)
         if not saved then
             warn(string.format("[PlayerData] Unload deferred: %s", tostring(reason)))
         end
         return saved, reason
     end,
-    onSessionReady = function(player)
-        local participationReady, participationError = raidService:onProfileReady(player.UserId)
+    onSessionReady = function(player, userId)
+        if userId == nil then
+            return false
+        end
+        local participationReady, participationError = raidService:onProfileReady(userId)
         if not participationReady then
             warn(
                 string.format(
@@ -278,36 +304,42 @@ local sessionService = SessionService.new({
             )
             return false
         end
-        local synced, syncError = creatureService:syncPlayer(player.UserId)
+        local synced, syncError = creatureService:syncPlayer(userId)
         if not synced then
             warn(string.format("[Base] Could not sync collection: %s", tostring(syncError)))
             return false
         end
         return economyService:startPlayer(player)
     end,
-    onSessionStarted = function(player, session)
-        local profile = playerDataService:getSnapshot(player.UserId)
+    onSessionStarted = function(_player, session)
+        local profile = playerDataService:getSnapshot(session.userId)
         if profile ~= nil then
-            telemetry:startSession(player.UserId, session.sessionId, session.joinedAt, profile)
+            telemetry:startSession(session.userId, session.sessionId, session.joinedAt, profile)
         end
     end,
-    onSessionEnding = function(player)
-        telemetry:endSession(player.UserId)
+    onSessionEnding = function(_player, session)
+        telemetry:endSession(session.userId)
     end,
-    onSessionEnded = function(player)
-        theftService:onPlayerRemoving(player.UserId)
-        tagService:onPlayerRemoving(player.UserId)
+    onSessionEnded = function(player, userId)
+        if userId == nil then
+            return
+        end
+        theftService:onPlayerRemoving(userId)
+        tagService:onPlayerRemoving(userId)
         economyService:stopPlayer(player)
-        mutationService:clearUser(player.UserId)
-        creatureService:cleanupUser(player.UserId)
+        mutationService:clearUser(userId)
+        creatureService:cleanupUser(userId)
         if actionService ~= nil then
-            actionService:clearUser(player.UserId)
+            actionService:clearUser(userId)
         end
     end,
-    onOperationalChanged = function(player, isOperational, _base, joinedDuringRaidId)
-        theftService:onOperationalChanged(player.UserId, isOperational)
-        local grace =
-            raidService:onOperationalChanged(player.UserId, isOperational, joinedDuringRaidId)
+    onOperationalChanged = function(player, isOperational, _base, joinedDuringRaidId, userId)
+        userId = userId or resolvePlayerUserId(player)
+        if userId == nil then
+            return
+        end
+        theftService:onOperationalChanged(userId, isOperational)
+        local grace = raidService:onOperationalChanged(userId, isOperational, joinedDuringRaidId)
         if grace ~= nil then
             player:SetAttribute(Protocol.PlayerAttributeNames.ArrivalGraceRaidId, grace.raidId)
             player:SetAttribute(

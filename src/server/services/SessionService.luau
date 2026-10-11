@@ -79,6 +79,9 @@ function SessionService.new(options: any)
         _loadProfile = options.loadProfile or defaultLoadProfile,
         _saveProfile = options.saveProfile,
         _isPlayer = options.isPlayer or defaultIsPlayer,
+        _resolveUserId = options.resolveUserId or function(player)
+            return player.UserId
+        end,
         _schedule = options.schedule or defaultSchedule,
         _spawnCharacter = options.spawnCharacter or defaultSpawnCharacter,
         _onRejected = options.onRejected,
@@ -104,7 +107,10 @@ function SessionService._getUserId(self: any, player: any): number?
     if not self._isPlayer(player) then
         return nil
     end
-    local userId = player.UserId
+    local ok, userId = pcall(self._resolveUserId, player)
+    if not ok then
+        return nil
+    end
     if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
         return nil
     end
@@ -184,10 +190,10 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     local token = self._nextToken
     self._pending[userId] = token
 
-    local loadCallOk, profileReady, profileError = pcall(self._loadProfile, player)
+    local loadCallOk, profileReady, profileError = pcall(self._loadProfile, player, userId)
     if self._pending[userId] ~= token then
         if loadCallOk and profileReady == true and self._saveProfile ~= nil then
-            pcall(self._saveProfile, player)
+            pcall(self._saveProfile, player, userId)
         end
         return false, "SessionCancelled"
     end
@@ -211,7 +217,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     local base, baseError = self._baseService:assign(player)
     if base == nil then
         if self._saveProfile ~= nil then
-            pcall(self._saveProfile, player)
+            pcall(self._saveProfile, player, userId)
         end
         if self._onRejected ~= nil then
             self._onRejected(player, baseError or "ServerFull")
@@ -224,7 +230,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     if type(sessionId) ~= "string" or #sessionId < 8 or #sessionId > 128 then
         self._baseService:release(player)
         if self._saveProfile ~= nil then
-            pcall(self._saveProfile, player)
+            pcall(self._saveProfile, player, userId)
         end
         if self._onRejected ~= nil then
             self._onRejected(player, "SessionInitializationFailed")
@@ -254,7 +260,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
     SessionService._applyPhase(session, phaseSnapshot)
 
     if self._onSessionReady ~= nil then
-        local readyOk, readyResult = pcall(self._onSessionReady, player)
+        local readyOk, readyResult = pcall(self._onSessionReady, player, userId, session)
         if not readyOk or readyResult == false then
             self._baseService:release(player)
             self._sessions[userId] = nil
@@ -262,10 +268,10 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
             setAttribute(player, "OddlingsSessionId", nil)
             clearRaidAttributes(player)
             if self._onSessionEnded ~= nil then
-                pcall(self._onSessionEnded, player)
+                pcall(self._onSessionEnded, player, userId, session)
             end
             if self._saveProfile ~= nil then
-                pcall(self._saveProfile, player)
+                pcall(self._saveProfile, player, userId)
             end
             if self._onRejected ~= nil then
                 self._onRejected(player, "SessionInitializationFailed")
@@ -340,7 +346,13 @@ function SessionService.onCharacterAdded(self: any, player: any, character: any)
         self._baseService:setOperational(player, true)
         setAttribute(player, "OddlingsOperational", true)
         if self._onOperationalChanged ~= nil then
-            self._onOperationalChanged(player, true, session.base, session.joinedDuringRaidId)
+            self._onOperationalChanged(
+                player,
+                true,
+                session.base,
+                session.joinedDuringRaidId,
+                userId
+            )
         end
     end)
     return true
@@ -360,7 +372,7 @@ function SessionService.onCharacterRemoving(self: any, player: any, _character: 
     self._baseService:setOperational(player, false)
     setAttribute(player, "OddlingsOperational", false)
     if self._onOperationalChanged ~= nil then
-        self._onOperationalChanged(player, false, session.base, session.joinedDuringRaidId)
+        self._onOperationalChanged(player, false, session.base, session.joinedDuringRaidId, userId)
     end
     return true
 end
@@ -393,10 +405,10 @@ function SessionService.onPlayerRemoving(self: any, player: any): boolean
         pcall(self._onSessionEnding, player, session)
     end
     if self._onSessionEnded ~= nil then
-        pcall(self._onSessionEnded, player)
+        pcall(self._onSessionEnded, player, userId, session)
     end
     if self._saveProfile ~= nil then
-        local saveOk, saved, saveError = pcall(self._saveProfile, player)
+        local saveOk, saved, saveError = pcall(self._saveProfile, player, userId)
         if not saveOk or saved == false then
             warn(
                 string.format("[Session] Profile unload deferred: %s", tostring(saveError or saved))

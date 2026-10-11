@@ -24,6 +24,24 @@ local function defaultSchedule(callback: () -> ())
     task.spawn(callback)
 end
 
+local function defaultResolveUserId(player: any): number?
+    if type(player) == "table" or typeof(player) == "Instance" then
+        return player.UserId
+    end
+    return nil
+end
+
+local function resolveUserId(self: any, player: any): number?
+    if type(player) ~= "table" and typeof(player) ~= "Instance" then
+        return nil
+    end
+    local ok, userId = pcall(self._resolveUserId, player)
+    if not ok or type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
+        return nil
+    end
+    return userId
+end
+
 local function setValue(parent: any, name: string, className: string, value: number): any
     local child = parent:FindFirstChild(name)
     if child == nil then
@@ -72,6 +90,7 @@ function EconomyService.new(options: any)
     return setmetatable({
         _playerDataService = options.playerDataService,
         _creatureService = options.creatureService,
+        _resolveUserId = options.resolveUserId or defaultResolveUserId,
         _wait = options.wait or defaultWait,
         _schedule = options.schedule or defaultSchedule,
         _publish = options.publish or publishLeaderboard,
@@ -261,10 +280,8 @@ function EconomyService.refreshPlayer(self: any, userId: number): boolean
 end
 
 function EconomyService.startPlayer(self: any, player: any): (boolean, string?)
-    local userId = if type(player) == "table" or typeof(player) == "Instance"
-        then player.UserId
-        else nil
-    if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
+    local userId = resolveUserId(self, player)
+    if userId == nil then
         return false, "InvalidPlayer"
     end
     if self._playerDataService:getSnapshot(userId) == nil then
@@ -290,10 +307,8 @@ function EconomyService.startPlayer(self: any, player: any): (boolean, string?)
 end
 
 function EconomyService.stopPlayer(self: any, player: any): boolean
-    local userId = if type(player) == "table" or typeof(player) == "Instance"
-        then player.UserId
-        else nil
-    if type(userId) ~= "number" then
+    local userId = resolveUserId(self, player)
+    if userId == nil then
         return false
     end
     local active = self._active[userId]

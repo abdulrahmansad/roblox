@@ -28,7 +28,7 @@ local STAND_COLORS = {
     Rare = Color3 and Color3.fromRGB(178, 113, 207) or nil,
 }
 
-local function getUserId(player: any): number?
+local function getUserId(player: any, resolver: ((any) -> number?)?): number?
     if type(player) ~= "table" then
         if typeof == nil or typeof(player) ~= "Instance" then
             return nil
@@ -36,6 +36,13 @@ local function getUserId(player: any): number?
     end
 
     local userId = player.UserId
+    if resolver ~= nil then
+        local ok, resolvedUserId = pcall(resolver, player)
+        if not ok then
+            return nil
+        end
+        userId = resolvedUserId
+    end
     if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
         return nil
     end
@@ -83,6 +90,7 @@ function BaseService.new(options: any?)
     local self = setmetatable({
         _bases = {},
         _userIdToBaseIndex = {},
+        _resolveUserId = options.resolveUserId,
         _onOwnershipChanged = options.onOwnershipChanged,
         _plotParts = {},
         _standParts = {},
@@ -453,7 +461,7 @@ function BaseService._renderStands(self: any, base: any)
 end
 
 function BaseService.assign(self: any, player: any): (any?, string?)
-    local userId = getUserId(player)
+    local userId = getUserId(player, self._resolveUserId)
     if userId == nil then
         return nil, "InvalidPlayer"
     end
@@ -484,7 +492,7 @@ function BaseService.assign(self: any, player: any): (any?, string?)
 end
 
 function BaseService.release(self: any, player: any): boolean
-    local userId = getUserId(player)
+    local userId = getUserId(player, self._resolveUserId)
     if userId == nil then
         return false
     end
@@ -516,7 +524,7 @@ function BaseService.release(self: any, player: any): boolean
 end
 
 function BaseService.getForPlayer(self: any, player: any): any?
-    local userId = getUserId(player)
+    local userId = getUserId(player, self._resolveUserId)
     if userId == nil then
         return nil
     end
@@ -652,7 +660,7 @@ function BaseService.setCollection(
 end
 
 function BaseService.setOperational(self: any, player: any, isOperational: boolean): boolean
-    local userId = getUserId(player)
+    local userId = getUserId(player, self._resolveUserId)
     if userId == nil or type(isOperational) ~= "boolean" then
         return false
     end

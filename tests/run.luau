@@ -3,6 +3,7 @@ local BaseService = require("../src/server/services/BaseService")
 local DevPingService = require("../src/server/services/DevPingService")
 local RaidService = require("../src/server/services/RaidService")
 local RequestGuard = require("../src/server/security/RequestGuard")
+local PlayerIdentity = require("../src/server/security/PlayerIdentity")
 local SessionService = require("../src/server/services/SessionService")
 local ProfileStore = require("../src/server/persistence/ProfileStore")
 local TransferJournalStore = require("../src/server/persistence/TransferJournalStore")
@@ -1142,6 +1143,65 @@ test("session boundary rejects malformed player lifecycle input", function()
     assert(not accepted, "invalid user identity must be rejected")
     assert(reason == "InvalidPlayer", "invalid lifecycle input returns a stable error")
     assert(service._baseService:getAvailableCount() == 8, "invalid input must not reserve a base")
+end)
+
+test("unpublished Studio identities support isolated local multiplayer sessions", function()
+    local resolveUserId = function(player)
+        return PlayerIdentity.resolve(player, true)
+    end
+    local player = newPlayer(-1)
+    local syntheticUserId = resolveUserId(player)
+    expect(syntheticUserId == 2_147_483_647)
+    expect(PlayerIdentity.resolve(newPlayer(-8), true) == 2_147_483_640)
+    expect(PlayerIdentity.resolve(newPlayer(-9), true) == nil)
+    expect(PlayerIdentity.resolve(newPlayer(-1), false) == nil)
+    expect(PlayerIdentity.resolve(newPlayer(501), false) == 501)
+    expect(PlayerIdentity.resolve(newPlayer(0), true) == nil)
+
+    local baseService = BaseService.new({ baseCount = 1, resolveUserId = resolveUserId })
+    local loadedUserId = nil
+    local readyUserId = nil
+    local savedUserId = nil
+    local sessionService = SessionService.new({
+        baseService = baseService,
+        raidService = RaidService.new(),
+        resolveUserId = resolveUserId,
+        isPlayer = function(candidate)
+            return type(candidate) == "table" and type(candidate.UserId) == "number"
+        end,
+        loadProfile = function(_player, userId)
+            loadedUserId = userId
+            return true
+        end,
+        onSessionReady = function(_player, userId)
+            readyUserId = userId
+            return true
+        end,
+        saveProfile = function(_player, userId)
+            savedUserId = userId
+            return true
+        end,
+    })
+
+    expect(sessionService:onPlayerAdded(player))
+    expect(loadedUserId == syntheticUserId and readyUserId == syntheticUserId)
+    expect(sessionService:getSession(player).userId == syntheticUserId)
+    expect(player.attributes.OddlingsRaidPhase == "PEACE")
+    expect(baseService:getForPlayer(player).ownerUserId == syntheticUserId)
+
+    local dataService = makeLoadedDataService(syntheticUserId)
+    local economyService = EconomyService.new({
+        playerDataService = dataService,
+        schedule = function() end,
+        publish = function() end,
+        resolveUserId = resolveUserId,
+    })
+    expect(economyService:startPlayer(player))
+    expect(economyService:stopPlayer(player))
+
+    expect(sessionService:onPlayerRemoving(player))
+    expect(savedUserId == syntheticUserId)
+    expect(baseService:getAvailableCount() == 1)
 end)
 
 test("failed profile readiness rejects the player before base assignment", function()
