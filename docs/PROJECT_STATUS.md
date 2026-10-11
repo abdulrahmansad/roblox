@@ -48,4 +48,4 @@ M10 remains open for Studio sessions and measured playtest evidence. A single-cl
 
 ## Git
 
-The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. The pushed history contains M1–M9 and the earlier M10 telemetry, offline playtest-summary, and unpublished-Studio startup work. The current M10 Studio identity fix and two-client evidence are described above; verify the branch and remote synchronization when recording each completed change. Historical M3 backup copies remain in the local stashes.
+The active branch is `main` and `origin` is `https://github.com/abdulrahmansad/roblox.git`. The pushed history contains M1–M9 and the M10 telemetry, offline playtest-summary, unpublished-Studio startup work, and Studio identity fix. Commit `20b02d3f4b13f477a73885ac4966cba9df10bfa3` contains the identity fix and regression test and is pushed to `origin/main`. M10 remains open for the gameplay and measured playtest gates listed above. Historical M3 backup copies remain in the local stashes.
