@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
 
 local Protocol = require(ReplicatedStorage:WaitForChild("Shared").network.Protocol)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
@@ -438,14 +439,21 @@ local function createDropMarker(position: any)
     dropMarker = marker
 end
 
+local function positionToast()
+    if toastPanel == nil then
+        return
+    end
+    toastPanel.Position =
+        UDim2.new(0.5, 0, 0, HudModel.getToastOffsetY(introCard ~= nil and introCard.Visible))
+end
+
 announce = function(message: string, duration: number?)
     if toastPanel == nil or toastLabel == nil then
         return
     end
     toastRevision += 1
     local revision = toastRevision
-    toastPanel.Position =
-        UDim2.new(0.5, 0, 0, if introCard ~= nil and introCard.Visible then 306 else 190)
+    positionToast()
     toastLabel.Text = message
     toastLabel.TextColor3 = Color3.fromRGB(247, 249, 255)
     toastPanel.Visible = true
@@ -2093,6 +2101,9 @@ renderHud = function()
     local tutorialComplete = snapshot.tutorialCompleted == true
     local needsThemeChoice = not tutorialComplete and tutorialTheme == nil and not guidanceSkipped
     introCard.Visible = needsThemeChoice and menuKind == nil
+    if toastPanel ~= nil and toastPanel.Visible then
+        positionToast()
+    end
     goalCard.Visible = not needsThemeChoice and menuKind == nil
     if tutorialComplete then
         local phase = player and player:GetAttribute(Protocol.PlayerAttributeNames.RaidPhase)
@@ -2158,16 +2169,22 @@ renderContext = function()
             contextHold = nil
         end
     end
-    if menuKind ~= nil then
+    local introVisible = introCard ~= nil and introCard.Visible
+    if
+        not HudModel.shouldDisplayContextAction(
+            currentContext ~= nil,
+            menuKind ~= nil,
+            introVisible
+        )
+    then
         contextButton.Visible = false
+        if currentContext == nil then
+            contextButton.Text = ""
+            setHoldProgress(0)
+        end
         return
     end
-    contextButton.Visible = currentContext ~= nil
-    if currentContext == nil then
-        contextButton.Text = ""
-        setHoldProgress(0)
-        return
-    end
+    contextButton.Visible = true
     if contextHold == nil then
         contextButton.Text = describeContext(currentContext)
     end
@@ -2609,6 +2626,22 @@ function controller.start(): boolean
     bindLeaderstats()
     bindKeyboardActions()
     started = true
+    task.spawn(function()
+        task.wait(1)
+        for _ = 1, 10 do
+            if not started then
+                return
+            end
+            local success = pcall(function()
+                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+            end)
+            if success then
+                return
+            end
+            task.wait(0.1)
+        end
+        warn("[Oddlings] Could not disable the default Roblox player list.")
+    end)
 
     addConnection(UserInputService.InputEnded:Connect(function(input)
         if contextHold ~= nil and contextHold.inputType == input.UserInputType then

@@ -1299,6 +1299,12 @@ test("M8 HUD summarizes income, first-session goals, rarity labels, and action f
     expect(
         string.find(HudModel.getGoal({ tutorialCompleted = false }), "free Common mutation") ~= nil
     )
+    expect(HudModel.shouldDisplayContextAction(true, false, false))
+    expect(not HudModel.shouldDisplayContextAction(true, false, true))
+    expect(not HudModel.shouldDisplayContextAction(true, true, false))
+    expect(not HudModel.shouldDisplayContextAction(false, false, false))
+    expect(HudModel.getToastOffsetY(true) == 306)
+    expect(HudModel.getToastOffsetY(false) == 190)
 
     profile.creatures[1].mutationFormId = "Cinder"
     expect(HudModel.getIncomePerMinute(profile.creatures) == 50)

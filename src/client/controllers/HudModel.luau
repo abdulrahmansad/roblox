@@ -15,6 +15,8 @@ local CapsuleConfig = if game ~= nil
 
 local HudModel = {}
 HudModel.MIN_TOUCH_TARGET_PX = 56
+local TOAST_INTRO_OFFSET_PX = 306
+local TOAST_NORMAL_OFFSET_PX = 190
 
 local RARITIES = {
     Common = { icon = "●", color = "Common" },
@@ -93,6 +95,18 @@ function HudModel.getGoal(snapshot: any, guidanceSkipped: boolean?): string
         )
     end
     return "Choose an oddling to improve before the next Raid."
+end
+
+function HudModel.shouldDisplayContextAction(
+    contextAvailable: boolean,
+    menuOpen: boolean,
+    introVisible: boolean
+): boolean
+    return contextAvailable and not menuOpen and not introVisible
+end
+
+function HudModel.getToastOffsetY(introVisible: boolean): number
+    return if introVisible then TOAST_INTRO_OFFSET_PX else TOAST_NORMAL_OFFSET_PX
 end
 
 function HudModel.getRarityPresentation(rarity: any): any
