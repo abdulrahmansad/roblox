@@ -1,34 +1,41 @@
-# Build start checklist
+# Build and release readiness checklist
 
-V1 pre-build readiness is complete, and the V1 build is in progress. M1–M5 are implemented, locally verified, committed, and pushed; M6 is next. Studio checks remain pending.
+The V1 design and architecture are locked. M1–M9 portable implementation is complete. M10's portable diagnostics and hostile-review slice passes, but M10 is not accepted because its empirical Studio playtest gates remain unverified. The approved design remains frozen.
 
 | Gate | Status | Evidence |
 | --- | --- | --- |
-| V1 design frozen | **PASS** | [GAME_DESIGN.md](docs/GAME_DESIGN.md) marks the approved V1 specification as frozen. |
-| Final Welcome protection correction | **PASS** | [RAIDS.md](docs/RAIDS.md), [DATA_MODEL.md](docs/DATA_MODEL.md), [STATE_MACHINES.md](docs/STATE_MACHINES.md), and [SECURITY.md](docs/SECURITY.md) define the durable first-participation marker and strict grace boundary. |
-| Architecture locked | **PASS — SPECIFICATION** | [ARCHITECTURE.md](docs/ARCHITECTURE.md) assigns server services, shared contracts, and presentation-only client controllers. |
-| Data model locked | **PASS — SPECIFICATION** | [DATA_MODEL.md](docs/DATA_MODEL.md) specifies schema, defaults, migrations, validation, corruption handling, and runtime-only state. |
-| Network protocol locked | **PASS — SPECIFICATION** | [NETWORK_PROTOCOL.md](docs/NETWORK_PROTOCOL.md) defines actions, payloads, phases, validation, throttles, idempotency, events, and errors. |
-| State machines locked | **PASS — SPECIFICATION** | [STATE_MACHINES.md](docs/STATE_MACHINES.md) defines Raid, theft, mutation, and Welcome protection transitions. |
-| Test matrix ready | **PASS — SPECIFICATION** | [TESTING.md](docs/TESTING.md) covers capsule, mutation, Raid, Welcome protection, theft, Tag, persistence, protocol, Studio, and monetization. |
-| M0–M12 ready | **PASS — SPECIFICATION** | [MILESTONES.md](docs/MILESTONES.md) defines scope, non-goals, dependencies, results, tests, acceptance, docs, and commit boundaries. |
-| Toolchain | **PASS** | Pinned tools match; current `./scripts/verify.ps1` passes format, lint (0 warnings/errors), 56 portable tests, and Rojo build. PowerShell scripts and pinned versions were checked. No skill-specific validator is supplied in the repository. |
-| Rojo configuration/build | **PASS** | `default.project.json` builds successfully. |
-| Rojo serve workflow | **PASS** | `./scripts/serve.ps1` served `127.0.0.1:34872` with HTTP 200; the process was stopped after checking. Connection and two-client steps are documented in [tests/multiplayer/README.md](tests/multiplayer/README.md). |
-| Studio status | **KNOWN — HUMAN CHECK PENDING** | Roblox Studio is not installed in the inspected locations; sign-in cannot be checked and the Rojo plugin cannot be verified. No Studio success is claimed. |
-| Existing M1/M2 implementation | **PORTABLE PASS; STUDIO PENDING** | Session/base, profile persistence, and online income are committed on `main`; engine-backed and live DataStore checks remain pending. |
-| M3 | **PORTABLE PASS; STUDIO PENDING** | Capsule, creature, sale, slot, stand projection, and centralized action code pass the 37-test suite and Rojo build. Studio kiosk and visual stand checks remain pending. |
-| M4 | **PORTABLE PASS; STUDIO PENDING** | Its 48-test acceptance run passed; those regression cases remain in the current 56-test suite. Studio station checks remain pending. |
-| M5 | **PORTABLE PASS; STUDIO PENDING** | Exact Raid clock, phase snapshots/events, join grace, expiry and reset/rejoin checks pass; Studio presentation and multiplayer checks remain pending. |
-| M6–M12 | **READY TO IMPLEMENT** | Remaining milestone scopes and acceptance gates are specified in `docs/MILESTONES.md`. |
-| Git | **PASS — SYNCHRONIZED** | M5 commit `f28a7165fcb9cc55291f5fb1dfc6118ca6752032` is pushed; `main` and `origin/main` match. |
+| V1 design, architecture, data model, protocol, and state machines | **LOCKED** | `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, `docs/NETWORK_PROTOCOL.md`, and `docs/STATE_MACHINES.md`. |
+| M1–M9 local implementation | **PORTABLE PASS; STUDIO PENDING** | Milestone records in `docs/PROJECT_STATUS.md`; all remain in the current regression suite. |
+| M10 local hostile review and diagnostics | **PORTABLE PASS; PLAYTEST PENDING** | Current `./scripts/verify.ps1`: formatting, Selene (0 issues), 87 Lune tests, and Rojo build. Local event tests cover server-derived progression/economy/theft events, replay safety, and strict grace eligibility. |
+| M10 balance and release gates | **NOT ACCEPTED** | First-session timing, loss-driven exits, phone/tablet usability, 2-client races, 6–8-client behavior, persistence integration, and device performance require Studio playtests. No balance adjustment is justified without this evidence. |
+| M11 Curator's Palette | **GATED** | Begins only after M10 gameplay gates pass; Creator Hub pass creation and entitlement validation require the development account. No product ID or pass code has been created. |
+| M12 release readiness | **PREPARATION ONLY** | Checklist below is unsigned. M12 depends on M7–M11 acceptance, live persistence, support ownership, current platform/account review, and rollback rehearsal. |
+| Rojo configuration/build | **PASS** | `default.project.json` builds through the canonical verification script. |
+| Git | **SAFE STATE** | Verified M10 code commit `0784779c81303cbe31062b7c941984c1cfa0b1aa` is pushed to `origin/main`; no force push or history rewrite was used. |
+| Studio status | **HUMAN CHECK REQUIRED** | Studio was rechecked during M10 and remains absent from process, PATH, and inspected install locations. No Studio, device, multiplayer, or live DataStore success is claimed. |
 
-Historical copies of the paused M3 work remain in local stashes after the M3 implementation was committed.
+## Human action to unblock M10
 
-## Human-only action
+1. Install and sign in to Roblox Studio on this machine, then install the Rojo 7 Studio plugin.
+2. From the repository root, run `./scripts/serve.ps1` and connect the plugin to `localhost:34872`.
+3. Follow [tests/multiplayer/README.md](tests/multiplayer/README.md): run the 2-client interaction/race scenarios, then 6–8-client join/leave checks; use representative phone/tablet emulation; inspect server output for `[OddlingsAnalytics]` lines and aggregate first-session timing, economy, protection checks, Tag/recovery, and loss-to-exit results.
+4. Use a safe test experience/store for live persistence validation. Do not connect Studio testing to production player data.
+5. Return the playtest results and any console errors. The local canonical command to rerun afterward is `./scripts/verify.ps1`.
 
-Install and sign in to Roblox Studio, install the Rojo 7 plugin, connect it to `localhost:34872`, then run the M0 two-client smoke and the M1–M5 checks in [tests/multiplayer/README.md](tests/multiplayer/README.md). Studio remains a validation gap, not a blocker to portable work.
+After M10 is accepted, M11 requires the account owner to create the approved 99 Robux Curator's Palette pass in Creator Hub and provide its product ID for server-side configuration and entitlement testing. Public publishing remains a separate action and is not authorized by this checklist.
 
-## Verdict
+## M12 release checklist — prepared, not signed off
 
-**BUILD IN PROGRESS** — the locked V1 plan is being implemented milestone by milestone. Studio-only checks remain explicit and do not block portable milestone work.
+- [ ] M0–M11 acceptance evidence is current and all full local verification is green.
+- [ ] Studio smoke, 2-client race/security checks, and 6–8-client load/join/leave checks pass.
+- [ ] Phone and tablet checks pass for readability, 52 px controls, holds, reduced effects, and audio alternatives.
+- [ ] Live persistence load/save, session conflict, retry, shutdown, backup restore, and theft journal recovery are validated against a safe test store.
+- [ ] No open Critical or High gameplay, authority, theft, or data-integrity issue remains.
+- [ ] Moderation, privacy, support/debugging, and current Creator Hub/platform requirements are reviewed.
+- [ ] Performance evidence covers low-end hardware, memory, instance count, network volume, connection cleanup, and 6–8 players.
+- [ ] Balance evidence satisfies the gates in `docs/MVP.md`, including first capsule/Raid timing and loss-driven exits.
+- [ ] Cosmetic pass entitlement is verified server-side and has no gameplay, visibility, capacity, or raid effect.
+- [ ] Release candidate commit, rollback revision/procedure, and support owner are recorded.
+- [ ] Public release decision is reviewed and explicitly authorized separately.
+
+**Current verdict: NOT READY FOR RELEASE.** M10 empirical gates are open; M11 and M12 are not accepted.

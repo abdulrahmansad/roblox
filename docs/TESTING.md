@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, and M9 visual catalogs, map geometry, Codex, audio configuration, and Mythic announcements. The latest full run passed 86 tests with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, M9 visual catalogs/map/Codex/audio, and M10 playtest telemetry. The latest full run passed 87 tests with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -20,6 +20,8 @@ end)
 ```
 
 This engine-backed command was not run during bootstrap because Roblox Studio is not installed on the inspected machine.
+
+M10's portable telemetry tests verify allowlisted server events, session-local correlation, first-session timing, server-observed owned-time lower bounds, loss-to-exit timing, Raid/grace eligibility boundaries, and replay-safe action emission. The diagnostic writer is server-only and rejects arbitrary fields. Controlled Studio sessions are still required to collect playtest evidence.
 
 ## Required future coverage
 
@@ -39,7 +41,7 @@ This engine-backed command was not run during bootstrap because Roblox Studio is
 
 ## Future implementation test matrix
 
-These are required cases for the listed milestones. M1–M9 portable coverage is in place for implemented scope; M10–M12 coverage remains to be added alongside implementation. Studio multiplayer checks for M6/M8/M9 and live persistence integration remain pending. Welcome participation tests share the Raid clock and transfer behavior; M7 adds storage-failure and restart coverage. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
+These are required cases for the listed milestones. M1–M9 portable coverage is in place for implemented scope; M10's local telemetry and hostile-boundary coverage is added, while its Studio acceptance plus M11–M12 coverage remain pending. Studio multiplayer checks for M6/M8/M9 and live persistence integration remain pending. Welcome participation tests share the Raid clock and transfer behavior; M7 adds storage-failure and restart coverage. Use deterministic injected rolls and a controllable server clock, never statistical pass/fail thresholds for exact odds.
 
 | Area | Cases and expected result | Test layer / milestone |
 | --- | --- | --- |
@@ -54,6 +56,7 @@ These are required cases for the listed milestones. M1–M9 portable coverage is
 | Content presentation | Verify exactly 12 species recipes across four rigs, 24 mutation recipes, 36 Codex rows, all map bases fit the 180-stud footprint, and only successful equipped Mythics broadcast a name/form. Verify income cues follow committed positive online payouts and never alter Scrap; return reasons and drop positions stay participant-only. | Portable catalog/service tests; Studio model/material/audio load, mobile readability, and 2-client presentation pending; M9 |
 | Protocol/security | Exact allowlisted keys and bounded payload sizes; server derives Player identity, phase, price, rarity, costs, ownership, position, results, and entitlement; request IDs are idempotent; global/per-action rate limits run before expensive operations; rejection is safe and does not partially mutate state. Verify snapshot/event presentation fields expose no other player's profile or drop location. | Unit + integration; M0, M3–M8, M11 |
 | Studio UX / performance | M0 DevPing smoke, two-client server/client startup, interaction feedback, mobile touch targets and reduced effects; then 6–8 client join/leave and load scenarios; no duplicate assignments, transfers, stale ownership, or phase drift. | Studio manual/automated; M0, M1, M8–M10 |
+| M10 telemetry | Allowlisted server events for progression timing, economy flows, first-Raid participation/completion, arrival-grace eligibility, starter/Welcome/grace protection checks, theft outcomes, and loss-to-exit; no account IDs or client payloads in output. | Portable boundary tests; private Studio session aggregation pending |
 | Monetization | Future pass entitlement refresh and receipt/purchase path are server-owned, idempotent, retry-safe, and cosmetic-only. This readiness phase creates no product IDs or remotes. | Service integration + Studio; M11 |
 
 The complete milestone-to-test mapping is in [MILESTONES.md](MILESTONES.md). Studio-only coverage remains pending until Studio is installed and signed in.

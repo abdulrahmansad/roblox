@@ -1,6 +1,6 @@
 # Roblox game foundation
 
-This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The V1 design is frozen. M1 session/base services, M2 profiles/online Scrap income, M3 capsules/creature/sale/capacity, M4 mutations, and M5 Raid timing/arrival grace are implemented and locally verified. M6–M12 remain. M0–M5 Studio checks are pending.
+This repository is the source of truth for Oddlings: Mutation Run, a small multiplayer creature mutation game. The V1 design is frozen. M1–M9 portable implementation is complete. M10's server-only playtest telemetry and hostile-review slice passes local verification, but M10 remains open until Studio progression/loss gates, mobile checks, persistence integration, and 2-/6–8-client behavior are measured. M11 is gated on M10; M12 depends on M7–M11. Studio checks remain pending. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) and [BUILD_START_CHECKLIST.md](BUILD_START_CHECKLIST.md).
 
 ## Prerequisites
 
