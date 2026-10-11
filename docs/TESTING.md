@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, M9 visual catalogs/map/Codex/audio, and M10 playtest telemetry. The latest full run passed 87 tests with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, the offline playtest-summary fixture checks, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, M9 visual catalogs/map/Codex/audio, and M10 playtest telemetry. The latest full run passed 87 Lune tests and the summarizer fixture assertions with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -21,7 +21,7 @@ end)
 
 This engine-backed command was not run during bootstrap because Roblox Studio is not installed on the inspected machine.
 
-M10's portable telemetry tests verify allowlisted server events, session-local correlation, first-session timing, server-observed owned-time lower bounds, loss-to-exit timing, Raid/grace eligibility boundaries, and replay-safe action emission. The diagnostic writer is server-only and rejects arbitrary fields. Controlled Studio sessions are still required to collect playtest evidence.
+M10's portable telemetry tests verify allowlisted server events, session-local correlation, first-session timing, server-observed owned-time lower bounds, loss-to-exit timing, Raid/grace eligibility boundaries, and replay-safe action emission. `scripts/test-playtest-summary.ps1` checks that the offline summarizer calculates progression, economy, grace, theft, and loss-to-exit metrics while omitting session identifiers and reporting malformed records. The diagnostic writer is server-only and rejects arbitrary fields. Controlled Studio sessions are still required to collect playtest evidence.
 
 ## Required future coverage
 

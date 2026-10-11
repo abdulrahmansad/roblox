@@ -25,6 +25,12 @@ First-session timing is measured from the server-observed join callback, includi
 
 ## Playtest use
 
-Use the server output for controlled, private sessions. Aggregate first-capsule and first-Raid elapsed times, mutation tiers/pity state, Scrap sources and sinks, loss rarity and observed ownership duration, Tag/recovery outcomes, and exits after a loss. Do not treat portable tests or these logs as a substitute for Studio playtests. A provider integration and retention policy require separate review before production collection.
+Use the server output for controlled, private sessions. Copy the server Output text, including `[OddlingsAnalytics]` lines, into a local text file and run:
+
+```powershell
+.\scripts\summarize-playtest.ps1 -Path C:\playtest\server-output.txt > C:\playtest\summary.json
+```
+
+The summary reports first-capsule, first-mutation, Slot 3, and first-Raid timing distributions; Scrap totals by source and sink; mutation tiers and Rare-pity roll count; grace eligibility; theft, protection, Tag, recovery, ownership-time, and loss-to-exit summaries; and malformed/unknown record counts. It does not output session IDs and does not decide whether a qualitative playtest gate passes. Review the aggregates alongside observer notes for guidance comprehension, mobile usability, chase feel, and group behavior. Do not treat portable tests or these logs as a substitute for Studio playtests. A provider integration and retention policy require separate review before production collection.
 
 Candidate future events include cohort return sessions and purchase funnel/completion. These are not currently emitted. Any provider or additional fields must preserve server authority, minimize personal data, and avoid raw client payloads.

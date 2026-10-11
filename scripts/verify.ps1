@@ -6,6 +6,7 @@ $steps = @(
     @{ Name = 'Formatting'; Script = 'format.ps1'; Arguments = @('-Check') },
     @{ Name = 'Lint'; Script = 'lint.ps1'; Arguments = @() },
     @{ Name = 'Tests'; Script = 'test.ps1'; Arguments = @() },
+    @{ Name = 'Playtest summary'; Script = 'test-playtest-summary.ps1'; Arguments = @() },
     @{ Name = 'Rojo build'; Script = 'build.ps1'; Arguments = @() }
 )
 
