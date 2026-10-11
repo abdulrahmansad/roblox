@@ -125,6 +125,9 @@ local function finalizeParticipation(self: any, userId: number, marker: any, now
     end
     self._pendingFirstRaidParticipation[userId] = nil
     self._participationRetryAt[userId] = nil
+    if changed == true and type(self._emitAnalytics) == "function" then
+        pcall(self._emitAnalytics, userId, "first_raid_completed", {})
+    end
     return changed == true
 end
 
@@ -133,7 +136,8 @@ local function beginParticipation(
     userId: number,
     raidId: string,
     completesAtUnix: number,
-    forceRetry: boolean?
+    forceRetry: boolean?,
+    participationReason: string?
 )
     if self._beginFirstRaidParticipation == nil then
         return false
@@ -150,8 +154,14 @@ local function beginParticipation(
         return false
     end
     local marker = { raidId = raidId, completesAtUnix = completesAtUnix }
-    local ok, began, existingOrError, failure =
+    local ok, began, existingOrError, failure, created =
         pcall(self._beginFirstRaidParticipation, userId, raidId, completesAtUnix)
+    if created == true and type(self._emitAnalytics) == "function" then
+        local reason = participationReason
+            or self._pendingFirstRaidParticipationReason[userId]
+            or "raid_start"
+        pcall(self._emitAnalytics, userId, "first_raid_participated", { reason = reason })
+    end
     if not ok or not began then
         self._pendingFirstRaidParticipation[userId] = marker
         self._participationRetryAt[userId] = nowUnix + 5
@@ -168,6 +178,7 @@ local function beginParticipation(
     end
     self._pendingFirstRaidParticipation[userId] = nil
     self._participationRetryAt[userId] = nil
+    self._pendingFirstRaidParticipationReason[userId] = nil
     local persistedMarker = if type(existingOrError) == "table" then existingOrError else marker
     if persistedMarker ~= nil and nowUnix >= persistedMarker.completesAtUnix then
         finalizeParticipation(self, userId, persistedMarker, nowUnix)
@@ -179,7 +190,8 @@ local function scheduleParticipation(
     self: any,
     userId: number,
     raidId: string,
-    completesAtUnix: number
+    completesAtUnix: number,
+    participationReason: string?
 )
     local nowUnix = self._clock()
     local pending = self._pendingFirstRaidParticipation[userId]
@@ -198,10 +210,20 @@ local function scheduleParticipation(
         raidId = raidId,
         completesAtUnix = completesAtUnix,
     }
+    if participationReason ~= nil then
+        self._pendingFirstRaidParticipationReason[userId] = participationReason
+    end
     self._participationRetryAt[userId] = nowUnix + 5
     self._participationInFlight[userId] = true
     local ok, failure = pcall(self._schedule, function()
-        beginParticipation(self, userId, raidId, completesAtUnix, true)
+        beginParticipation(
+            self,
+            userId,
+            raidId,
+            completesAtUnix,
+            true,
+            self._pendingFirstRaidParticipationReason[userId]
+        )
         self._participationInFlight[userId] = nil
     end)
     if not ok then
@@ -238,7 +260,7 @@ local function handlePhaseBoundary(self: any, phase: string, phaseStartedAtUnix:
         local completesAtUnix = self._phaseEndsAtUnix + self._phaseDurations.RESOLUTION
         for _, userId in participantUserIds(self) do
             if isUserId(userId) then
-                scheduleParticipation(self, userId, self._raidId, completesAtUnix)
+                scheduleParticipation(self, userId, self._raidId, completesAtUnix, "raid_start")
             end
         end
     elseif phase == "COOLDOWN" then
@@ -344,8 +366,10 @@ function RaidService.new(options: any?)
         _beginFirstRaidParticipation = options.beginFirstRaidParticipation,
         _finalizeFirstRaidParticipation = options.finalizeFirstRaidParticipation,
         _getParticipationMarker = options.getParticipationMarker,
+        _emitAnalytics = options.emitAnalytics,
         _schedule = options.schedule or defaultSchedule,
         _pendingFirstRaidParticipation = {},
+        _pendingFirstRaidParticipationReason = {},
         _participationRetryAt = {},
         _participationInFlight = {},
         _heartbeatConnection = nil,
@@ -379,21 +403,33 @@ function RaidService.step(self: any, nowUnix: number?): (boolean, number?, strin
         return false, nil, "InvalidTimestamp"
     end
 
-    if self._phase == "RAID" then
-        for userId, grace in self._arrivalGraceByUserId do
-            if grace.expiresAtUnix < self._phaseEndsAtUnix and grace.expiresAtUnix <= now then
+    for userId, grace in self._arrivalGraceByUserId do
+        if not grace.expiryLogged and grace.expiresAtUnix <= now then
+            grace.expiryLogged = true
+            local eligible = grace.expiresAtUnix < grace.raidEndsAtUnix
+            if type(self._emitAnalytics) == "function" then
+                pcall(self._emitAnalytics, userId, "arrival_grace_expired", { eligible = eligible })
+            end
+            if eligible and self._phase == "RAID" and grace.raidId == self._raidId then
                 scheduleParticipation(
                     self,
                     userId,
                     grace.raidId,
-                    self._phaseEndsAtUnix + self._phaseDurations.RESOLUTION
+                    grace.raidEndsAtUnix + self._phaseDurations.RESOLUTION,
+                    "arrival_grace_expired"
                 )
             end
         end
     end
     for userId, marker in self._pendingFirstRaidParticipation do
         if (self._participationRetryAt[userId] or 0) <= now then
-            scheduleParticipation(self, userId, marker.raidId, marker.completesAtUnix)
+            scheduleParticipation(
+                self,
+                userId,
+                marker.raidId,
+                marker.completesAtUnix,
+                self._pendingFirstRaidParticipationReason[userId]
+            )
         end
     end
 
@@ -470,8 +506,13 @@ function RaidService.onOperationalChanged(
         raidId = self._raidId,
         startedAtUnix = now,
         expiresAtUnix = now + self._arrivalGraceSeconds,
+        raidEndsAtUnix = self._phaseEndsAtUnix,
+        expiryLogged = false,
     }
     self._arrivalGraceByUserId[userId] = record
+    if type(self._emitAnalytics) == "function" then
+        pcall(self._emitAnalytics, userId, "arrival_grace_started", {})
+    end
     return copyGrace(record, now), nil
 end
 
@@ -482,7 +523,14 @@ function RaidService.onProfileReady(self: any, userId: number): (boolean, string
     local marker = self._pendingFirstRaidParticipation[userId]
     if marker ~= nil then
         self._participationRetryAt[userId] = nil
-        local began = beginParticipation(self, userId, marker.raidId, marker.completesAtUnix, true)
+        local began = beginParticipation(
+            self,
+            userId,
+            marker.raidId,
+            marker.completesAtUnix,
+            true,
+            self._pendingFirstRaidParticipationReason[userId]
+        )
         if not began then
             return false, "ParticipationSavePending"
         end

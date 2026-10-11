@@ -83,11 +83,14 @@ function SessionService.new(options: any)
         _spawnCharacter = options.spawnCharacter or defaultSpawnCharacter,
         _onRejected = options.onRejected,
         _onSessionReady = options.onSessionReady,
+        _onSessionStarted = options.onSessionStarted,
+        _onSessionEnding = options.onSessionEnding,
         _onSessionEnded = options.onSessionEnded,
         _generateSessionId = options.generateSessionId or function(_player, token)
             return "session-" .. tostring(token)
         end,
         _onOperationalChanged = options.onOperationalChanged,
+        _clock = options.clock or os.clock,
         _sessions = {},
         _pending = {},
         _connections = {},
@@ -169,6 +172,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
         return false, "InvalidPlayer"
     end
     local joinedPhaseSnapshot = self._raidService:getSnapshot()
+    local joinedAt = self._clock()
     if self._sessions[userId] ~= nil then
         return true, nil
     end
@@ -239,6 +243,7 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
             else nil,
         operational = false,
         token = token,
+        joinedAt = joinedAt,
         connections = {},
     }
     self._sessions[userId] = session
@@ -267,6 +272,10 @@ function SessionService.onPlayerAdded(self: any, player: any): (boolean, string?
             end
             return false, "SessionInitializationFailed"
         end
+    end
+
+    if self._onSessionStarted ~= nil then
+        pcall(self._onSessionStarted, player, session)
     end
 
     if player.CharacterAdded ~= nil then
@@ -380,6 +389,9 @@ function SessionService.onPlayerRemoving(self: any, player: any): boolean
 
     session.operational = false
     self._baseService:setOperational(player, false)
+    if self._onSessionEnding ~= nil then
+        pcall(self._onSessionEnding, player, session)
+    end
     if self._onSessionEnded ~= nil then
         pcall(self._onSessionEnded, player)
     end

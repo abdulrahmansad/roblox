@@ -9,6 +9,9 @@ local Protocol = if game ~= nil
 local MutationConfig = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.config.MutationConfig)
     else require("../../shared/config/MutationConfig")
+local CreatureDefinitions = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.definitions.CreatureDefinitions)
+    else require("../../shared/definitions/CreatureDefinitions")
 local PLAYER_ATTRIBUTES = Protocol.PlayerAttributeNames
 
 local TheftService = {}
@@ -43,6 +46,13 @@ local function copyPosition(position: any): any?
         return nil
     end
     return { x = x, y = y, z = z }
+end
+
+local function rarityForCreature(creature: any): string?
+    local species = if type(creature) == "table"
+        then CreatureDefinitions[creature.speciesId]
+        else nil
+    return if type(species) == "table" then species.rarity else nil
 end
 
 local function isFinite(value: any): boolean
@@ -108,6 +118,7 @@ function TheftService.new(options: any)
             task.spawn(callback)
         end,
         _emitToUser = options.emitToUser,
+        _emitAnalytics = options.emitAnalytics,
         _attempts = {},
         _activeAttemptByThief = {},
         _activeOwnerLocks = {},
@@ -125,6 +136,26 @@ end
 function TheftService._emit(self: any, userId: number, event: string, data: any)
     if self._emitToUser ~= nil then
         pcall(self._emitToUser, userId, event, data)
+    end
+end
+
+function TheftService._recordProtectionCheck(
+    self: any,
+    userId: number,
+    role: string,
+    starterProtected: boolean,
+    welcomeProtected: boolean,
+    ownerArrivalGrace: boolean,
+    thiefArrivalGrace: boolean
+)
+    if type(self._emitAnalytics) == "function" then
+        pcall(self._emitAnalytics, userId, "theft_protection_check", {
+            role = role,
+            starterProtected = starterProtected,
+            welcomeProtected = welcomeProtected,
+            ownerArrivalGrace = ownerArrivalGrace,
+            thiefArrivalGrace = thiefArrivalGrace,
+        })
     end
 end
 
@@ -308,6 +339,26 @@ function TheftService._returnAttempt(self: any, attempt: any, reason: string)
     attempt.terminalReason = reason
     attempt.terminalAt = self._clock()
     self:_releaseLocks(attempt)
+    local rarity = rarityForCreature(attempt.creature)
+    if type(self._emitAnalytics) == "function" and rarity ~= nil then
+        if reason == "Recovered" then
+            pcall(
+                self._emitAnalytics,
+                attempt.ownerUserId,
+                "creature_recovered",
+                { rarity = rarity },
+                attempt.creature.id
+            )
+        elseif reason == "RecoveryExpired" then
+            pcall(
+                self._emitAnalytics,
+                attempt.ownerUserId,
+                "creature_auto_returned",
+                { rarity = rarity },
+                attempt.creature.id
+            )
+        end
+    end
     self:_emitState(attempt)
     return true
 end
@@ -395,7 +446,9 @@ function TheftService.beginTheft(
     if self._isStaggered ~= nil and self._isStaggered(thiefUserId, raid.raidId) == true then
         return nil, "Locked"
     end
-    if self:_isGraceProtected(thiefUserId) then
+    local thiefArrivalGrace = self:_isGraceProtected(thiefUserId)
+    if thiefArrivalGrace then
+        self:_recordProtectionCheck(thiefUserId, "actor", false, false, false, true)
         return nil, "Locked"
     end
     if self._activeAttemptByThief[thiefUserId] ~= nil then
@@ -424,6 +477,34 @@ function TheftService.beginTheft(
     end
     if targetOwnerId == nil then
         return nil, "NotOwner"
+    end
+    local ownerProfile = self._playerDataService:getSnapshot(targetOwnerId)
+    if ownerProfile ~= nil then
+        local starterProtected = ownerProfile.starterCreatureId == targetCreatureId
+        local protected = self._creatureService:isProtectedFromTheft(
+            ownerProfile,
+            targetCreatureId,
+            raid.serverTimeUnix
+        )
+        local welcomeProtected = protected and not starterProtected
+        local ownerArrivalGrace = self:_isGraceProtected(targetOwnerId)
+        local currentThiefArrivalGrace = self:_isGraceProtected(thiefUserId)
+        self:_recordProtectionCheck(
+            thiefUserId,
+            "actor",
+            starterProtected,
+            welcomeProtected,
+            ownerArrivalGrace,
+            currentThiefArrivalGrace
+        )
+        self:_recordProtectionCheck(
+            targetOwnerId,
+            "target",
+            starterProtected,
+            welcomeProtected,
+            ownerArrivalGrace,
+            currentThiefArrivalGrace
+        )
     end
     local profile, creature, eligibilityError =
         self:_targetEligible(thiefUserId, targetOwnerId, targetCreatureId, raid)
@@ -613,6 +694,17 @@ function TheftService._finishBankCommit(
     raidState.catalystGranted = true
     self._raidOwnerLosses[attempt.ownerUserId] = attempt.raidId
     self._inFlightCommits = math.max(0, self._inFlightCommits - 1)
+    local rarity = rarityForCreature(attempt.creature)
+    if type(self._emitAnalytics) == "function" and rarity ~= nil then
+        pcall(self._emitAnalytics, attempt.ownerUserId, "creature_lost", {
+            rarity = rarity,
+            hasMutation = attempt.creature.mutationFormId ~= nil,
+        }, attempt.creature.id)
+        pcall(self._emitAnalytics, attempt.thiefUserId, "theft_banked", {
+            rarity = rarity,
+            hasMutation = attempt.creature.mutationFormId ~= nil,
+        }, attempt.creature.id)
+    end
     pcall(self._creatureService.syncPlayer, self._creatureService, attempt.ownerUserId)
     pcall(self._creatureService.syncPlayer, self._creatureService, attempt.thiefUserId)
     local thiefProfile = self._playerDataService:getSnapshot(attempt.thiefUserId)

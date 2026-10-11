@@ -394,7 +394,7 @@ function PlayerDataService.beginFirstRaidParticipation(
     userId: number,
     raidId: string,
     completesAtUnix: number
-): (boolean, any?, string?)
+): (boolean, any?, string?, boolean?)
     if
         type(userId) ~= "number"
         or userId <= 0
@@ -402,11 +402,11 @@ function PlayerDataService.beginFirstRaidParticipation(
         or not validRaidId(raidId)
         or not isIntegerBetween(completesAtUnix, 0, 4_102_444_800)
     then
-        return false, nil, "InvalidFirstRaidParticipation"
+        return false, nil, "InvalidFirstRaidParticipation", false
     end
     local profile = self._profiles[userId]
     if profile == nil then
-        return false, nil, "ProfileNotLoaded"
+        return false, nil, "ProfileNotLoaded", false
     end
     if profile.hasCompletedFirstRaid then
         if self._dirty[userId] then
@@ -415,7 +415,7 @@ function PlayerDataService.beginFirstRaidParticipation(
                 return false, nil, saveError or "SaveFailed"
             end
         end
-        return true, nil, nil
+        return true, nil, nil, false
     end
     if profile.firstRaidParticipation ~= nil then
         local marker = cloneValue(profile.firstRaidParticipation)
@@ -425,7 +425,7 @@ function PlayerDataService.beginFirstRaidParticipation(
                 return false, marker, saveError or "SaveFailed"
             end
         end
-        return true, marker, nil
+        return true, marker, nil, false
     end
 
     local transacted, result, transactionError = self:transact(userId, function(draft)
@@ -442,16 +442,16 @@ function PlayerDataService.beginFirstRaidParticipation(
         return { changed = true, marker = draft.firstRaidParticipation }
     end)
     if not transacted or result == nil then
-        return false, nil, transactionError or "Unavailable"
+        return false, nil, transactionError or "Unavailable", false
     end
     local marker = cloneValue(result.marker)
     if result.changed or self._dirty[userId] then
         local saved, saveError = self:save(userId, false)
         if not saved then
-            return false, marker, saveError or "SaveFailed"
+            return false, marker, saveError or "SaveFailed", result.changed == true
         end
     end
-    return true, marker, nil
+    return true, marker, nil, result.changed == true
 end
 
 function PlayerDataService.finalizeFirstRaidParticipation(

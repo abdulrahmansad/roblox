@@ -24,12 +24,22 @@ local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore
 local TransferJournalStore = require(ServerScriptService.Server.persistence.TransferJournalStore)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
+local Telemetry = require(ServerScriptService.Server.analytics.Telemetry)
 
 assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match server capacity")
 local playerDataService: any = nil
 local theftService: any = nil
 local tagService: any = nil
 local domainEvent: any = nil
+local telemetry = Telemetry.new({
+    clock = os.clock,
+    write = function(event)
+        print("[OddlingsAnalytics] " .. HttpService:JSONEncode(event))
+    end,
+})
+local function emitAnalytics(userId: number, event: string, properties: any?, creatureId: string?)
+    return telemetry:record(userId, event, properties, creatureId)
+end
 local raidService = RaidService.new({
     clock = os.time,
     generateRaidId = function()
@@ -57,6 +67,7 @@ local raidService = RaidService.new({
         local profile = playerDataService:getSnapshot(userId)
         return if profile ~= nil then profile.firstRaidParticipation else nil
     end,
+    emitAnalytics = emitAnalytics,
     schedule = function(callback)
         task.spawn(callback)
     end,
@@ -97,6 +108,7 @@ local economyService = EconomyService.new({
     playerDataService = playerDataService,
     creatureService = creatureService,
     emitIncomeEvent = function(player, userId, amount, balance)
+        emitAnalytics(userId, "scrap_earned", { source = "income", amount = amount })
         if domainEvent == nil or player.Parent ~= Players then
             return
         end
@@ -195,6 +207,7 @@ theftService = TheftService.new({
             end)
         end
     end,
+    emitAnalytics = emitAnalytics,
 })
 tagService = TagService.new({
     raidService = raidService,
@@ -219,6 +232,7 @@ tagService = TagService.new({
             end)
         end
     end,
+    emitAnalytics = emitAnalytics,
 })
 local actionService: any = nil
 local sessionService = SessionService.new({
@@ -255,6 +269,15 @@ local sessionService = SessionService.new({
             return false
         end
         return economyService:startPlayer(player)
+    end,
+    onSessionStarted = function(player, session)
+        local profile = playerDataService:getSnapshot(player.UserId)
+        if profile ~= nil then
+            telemetry:startSession(player.UserId, session.sessionId, session.joinedAt, profile)
+        end
+    end,
+    onSessionEnding = function(player)
+        telemetry:endSession(player.UserId)
     end,
     onSessionEnded = function(player)
         theftService:onPlayerRemoving(player.UserId)
@@ -326,6 +349,7 @@ actionService = ActionService.new({
     domainEvent = domainEvent,
     kioskPart = kioskPart,
     mutationStationPart = mutationStationPart,
+    emitAnalytics = emitAnalytics,
 })
 assert(actionService:start(), "ActionService failed to start")
 assert(tagService:start(RunService.Heartbeat), "TagService failed to start")

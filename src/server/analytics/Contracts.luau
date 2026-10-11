@@ -1,11 +1,11 @@
--- Internal event boundary only. No external analytics provider is wired in.
+-- Shared shape for the private, server-owned playtest event boundary.
 
 export type EventProperties = { [string]: string | number | boolean }
 
 export type DomainEvent = {
-    name: string,
-    playerUserId: number?,
-    occurredAt: number,
+    event: string,
+    sessionId: string,
+    elapsedSeconds: number,
     properties: EventProperties?,
 }
 

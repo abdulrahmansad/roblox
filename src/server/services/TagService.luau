@@ -74,6 +74,7 @@ function TagService.new(options: any)
         _isOperational = options.isOperational,
         _clock = options.clock or os.clock,
         _emitToUser = options.emitToUser,
+        _emitAnalytics = options.emitAnalytics,
         _tagCooldowns = {},
         _tagImmunity = {},
         _staggers = {},
@@ -196,6 +197,9 @@ function TagService.tag(self: any, defenderUserId: number, targetUserId: number)
     local eventData = { targetUserId = targetUserId, result = result }
     self:_emit(defenderUserId, eventData)
     self:_emit(targetUserId, eventData)
+    if type(self._emitAnalytics) == "function" then
+        pcall(self._emitAnalytics, defenderUserId, "tag_succeeded", { outcome = result })
+    end
     return response, nil
 end
 

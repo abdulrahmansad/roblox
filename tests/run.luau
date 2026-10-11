@@ -23,6 +23,7 @@ local AudioCueConfig = require("../src/shared/config/AudioCueConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
 local CreatureVisualDefinitions = require("../src/shared/definitions/CreatureVisualDefinitions")
 local MutationDefinitions = require("../src/shared/definitions/MutationDefinitions")
+local Telemetry = require("../src/server/analytics/Telemetry")
 
 local passed = 0
 local failed = 0
@@ -356,6 +357,7 @@ local function makeTheftContext(options: any?)
             return unixNow.value
         end,
         emitToUser = options.emitToUser,
+        emitAnalytics = options.emitAnalytics,
         schedule = function(callback)
             if options.runScheduled ~= false then
                 callback()
@@ -381,6 +383,7 @@ local function makeTheftContext(options: any?)
             return monotonicNow.value
         end,
         emitToUser = options.emitToUser,
+        emitAnalytics = options.emitAnalytics,
     })
     local targetPosition = baseService:getCreatureDisplayPosition(ownerUserId, targetId)
     positions[ownerUserId] = baseService:getHomePadPosition(ownerUserId)
@@ -2321,6 +2324,7 @@ test("Raid start marks present players and finalizes them at Resolution end", fu
     local onlineUsers = { 610, 611 }
     local markers = {}
     local completed = {}
+    local analyticsEvents = {}
     local service = RaidService.new({
         clock = function()
             return now.value
@@ -2332,10 +2336,18 @@ test("Raid start marks present players and finalizes them at Resolution end", fu
             return onlineUsers
         end,
         beginFirstRaidParticipation = function(userId, raidId, completesAtUnix)
+            local created = markers[userId] == nil
             if markers[userId] == nil then
                 markers[userId] = { raidId = raidId, completesAtUnix = completesAtUnix }
             end
-            return true, markers[userId]
+            return true, markers[userId], nil, created
+        end,
+        emitAnalytics = function(userId, event, properties)
+            table.insert(analyticsEvents, {
+                userId = userId,
+                event = event,
+                properties = cloneTable(properties),
+            })
         end,
         getParticipationMarker = function(userId)
             return markers[userId]
@@ -2366,6 +2378,11 @@ test("Raid start marks present players and finalizes them at Resolution end", fu
         expect(markers[userId].raidId == raidId)
         expect(markers[userId].completesAtUnix == 1_450)
     end
+    expect(#analyticsEvents == 2, "only newly created participation markers are tracked")
+    for _, event in analyticsEvents do
+        expect(event.event == "first_raid_participated")
+        expect(event.properties.reason == "raid_start")
+    end
 
     now.value = 1_420
     expect(service:step())
@@ -2374,11 +2391,19 @@ test("Raid start marks present players and finalizes them at Resolution end", fu
     expect(service:step())
     expect(completed[610] and completed[611], "completion expires protection at COOLDOWN")
     expect(markers[610] == nil and markers[611] == nil)
+    local completionCount = 0
+    for _, event in analyticsEvents do
+        if event.event == "first_raid_completed" then
+            completionCount += 1
+        end
+    end
+    expect(completionCount == 2, "first-Raid completion events should match persisted transitions")
 end)
 
 test("late arrival grace participates only when expiry is strictly before Raid end", function()
     local now = { value = 0 }
     local markers = {}
+    local analyticsEvents = {}
     local service = RaidService.new({
         initialPhase = "RAID",
         clock = function()
@@ -2388,37 +2413,89 @@ test("late arrival grace participates only when expiry is strictly before Raid e
             return "late-welcome-" .. tostring(sequence)
         end,
         beginFirstRaidParticipation = function(userId, raidId, completesAtUnix)
+            local created = markers[userId] == nil
             markers[userId] = markers[userId]
                 or {
                     raidId = raidId,
                     completesAtUnix = completesAtUnix,
                 }
-            return true, markers[userId]
+            return true, markers[userId], nil, created
+        end,
+        emitAnalytics = function(userId, event, properties)
+            table.insert(analyticsEvents, {
+                userId = userId,
+                event = event,
+                properties = cloneTable(properties),
+            })
         end,
     })
     local raidId = service:getSnapshot().raidId
     now.value = 70
     expect(service:onOperationalChanged(621, true, raidId))
-    now.value = 80
+    now.value = 75
     expect(service:onOperationalChanged(620, true, raidId))
+    now.value = 80
+    expect(service:onOperationalChanged(622, true, raidId))
+    expect(#analyticsEvents == 3, "each ready mid-Raid join should log grace once")
     now.value = 85
     expect(service:step())
     expect(markers[621] ~= nil, "grace expiring at 85 begins first-Raid participation")
     expect(markers[621].completesAtUnix == 120)
+    local participationReason = nil
+    for _, event in analyticsEvents do
+        if event.event == "first_raid_participated" then
+            participationReason = event.properties.reason
+        end
+    end
+    expect(
+        participationReason == "arrival_grace_expired",
+        "eligible late join should record its server-determined participation reason"
+    )
+    local eligibleExpiry = false
+    for _, event in analyticsEvents do
+        if event.event == "arrival_grace_expired" then
+            eligibleExpiry = event.properties.eligible == true
+        end
+    end
+    expect(eligibleExpiry, "grace expiry before Raid end should be tracked as eligible")
     expect(markers[620] == nil, "grace expiring exactly at Raid end is ineligible")
     now.value = 90
     expect(service:step())
-    expect(markers[620] == nil, "late grace remains protected through later phases")
+    expect(markers[620] == nil, "exact-boundary expiry must not consume protection")
+    local exactExpiry = false
+    for _, event in analyticsEvents do
+        if event.event == "arrival_grace_expired" and event.userId == 620 then
+            exactExpiry = event.properties.eligible == false
+        end
+    end
+    expect(exactExpiry, "grace expiry at Raid end should be recorded as ineligible")
+    now.value = 95
+    expect(service:step())
+    local lateExpiry = false
+    for _, event in analyticsEvents do
+        if event.event == "arrival_grace_expired" and event.userId == 622 then
+            lateExpiry = event.properties.eligible == false
+        end
+    end
+    expect(lateExpiry, "grace expiry after Raid end should not consume first-Raid protection")
 end)
 
 test("theft channels server-side, carries one item, and commits a journaled bank", function()
     local bankEvents = {}
+    local analyticsEvents = {}
     local context = makeTheftContext({
         emitToUser = function(userId, event, data)
             table.insert(bankEvents, {
                 userId = userId,
                 event = event,
                 data = cloneTable(data),
+            })
+        end,
+        emitAnalytics = function(userId, event, properties)
+            table.insert(analyticsEvents, {
+                userId = userId,
+                event = event,
+                properties = cloneTable(properties),
             })
         end,
     })
@@ -2488,6 +2565,15 @@ test("theft channels server-side, carries one item, and commits a journaled bank
         end
     end
     expect(ownerRemoved and thiefAdded, "bank emits the committed ownership change to both players")
+    local lostTracked = false
+    local bankTracked = false
+    for _, event in analyticsEvents do
+        lostTracked = lostTracked
+            or (event.userId == context.ownerUserId and event.event == "creature_lost")
+        bankTracked = bankTracked
+            or (event.userId == context.thiefUserId and event.event == "theft_banked")
+    end
+    expect(lostTracked and bankTracked, "only the committed bank records loss and theft analytics")
 end)
 
 test("a cancellation at the completed channel boundary cannot undo a valid theft", function()
@@ -2530,12 +2616,35 @@ test(
             "only one thief gets the target lock"
         )
 
-        local protected = makeTheftContext({ welcomeTarget = true })
+        local protectionEvents = {}
+        local protected = makeTheftContext({
+            welcomeTarget = true,
+            emitAnalytics = function(userId, event, properties)
+                table.insert(protectionEvents, {
+                    userId = userId,
+                    event = event,
+                    properties = cloneTable(properties),
+                })
+            end,
+        })
         local welcome, welcomeError =
             protected.theftService:beginTheft(protected.thiefUserId, protected.targetId)
         expect(
             welcome == nil and welcomeError == "Locked",
             "unexpired Welcome creature stays protected"
+        )
+        local welcomeProtectionTracked = false
+        for _, event in protectionEvents do
+            welcomeProtectionTracked = welcomeProtectionTracked
+                or (
+                    event.event == "theft_protection_check"
+                    and event.properties.role == "actor"
+                    and event.properties.welcomeProtected
+                )
+        end
+        expect(
+            welcomeProtectionTracked,
+            "server should record Welcome protection at a valid attempt"
         )
         local starterId = protected.dataService:getSnapshot(protected.ownerUserId).starterCreatureId
         protected.positions[protected.thiefUserId] =
@@ -2567,20 +2676,48 @@ test(
             "an elapsed participation marker expires Welcome protection"
         )
 
-        local thiefGrace = makeTheftContext({ graceUserId = 1_202 })
+        local thiefGraceEvents = {}
+        local thiefGrace = makeTheftContext({
+            graceUserId = 1_202,
+            emitAnalytics = function(userId, event, properties)
+                table.insert(
+                    thiefGraceEvents,
+                    { userId = userId, event = event, properties = properties }
+                )
+            end,
+        })
         local graceAttempt, graceError =
             thiefGrace.theftService:beginTheft(thiefGrace.thiefUserId, thiefGrace.targetId)
         expect(
             graceAttempt == nil and graceError == "Locked",
             "arrival grace blocks theft initiation"
         )
-        local ownerGrace = makeTheftContext({ graceUserId = 1_201 })
+        expect(
+            thiefGraceEvents[1].properties.thiefArrivalGrace,
+            "server should record outgoing arrival-grace protection"
+        )
+        local ownerGraceEvents = {}
+        local ownerGrace = makeTheftContext({
+            graceUserId = 1_201,
+            emitAnalytics = function(userId, event, properties)
+                table.insert(
+                    ownerGraceEvents,
+                    { userId = userId, event = event, properties = properties }
+                )
+            end,
+        })
         local protectedBase, protectedBaseError =
             ownerGrace.theftService:beginTheft(ownerGrace.thiefUserId, ownerGrace.targetId)
         expect(
             protectedBase == nil and protectedBaseError == "Locked",
             "arrival grace protects the new owner's base"
         )
+        local ownerGraceTracked = false
+        for _, event in ownerGraceEvents do
+            ownerGraceTracked = ownerGraceTracked
+                or (event.event == "theft_protection_check" and event.properties.ownerArrivalGrace)
+        end
+        expect(ownerGraceTracked, "server should record incoming arrival-grace protection")
     end
 )
 
@@ -2633,13 +2770,32 @@ end)
 test(
     "Tag cancels channels, drops carries, enforces cooldown, and recovery returns ownership",
     function()
-        local context = makeTheftContext()
+        local tagAnalytics = {}
+        local context = makeTheftContext({
+            emitAnalytics = function(userId, event, properties)
+                table.insert(tagAnalytics, {
+                    userId = userId,
+                    event = event,
+                    properties = cloneTable(properties),
+                })
+            end,
+        })
         local begun = context.theftService:beginTheft(context.thiefUserId, context.targetId)
         expect(begun ~= nil)
         context.positions[context.ownerUserId] = context.positions[context.thiefUserId]
         local tagged, tagError = context.tagService:tag(context.ownerUserId, context.thiefUserId)
         expect(tagged ~= nil and tagError == nil and tagged.success)
         expect(tagged.result == "Cancelled")
+        local successfulTagCount = 0
+        for _, event in tagAnalytics do
+            if event.event == "tag_succeeded" and event.properties.outcome == "Cancelled" then
+                successfulTagCount += 1
+            end
+        end
+        expect(
+            successfulTagCount == 1,
+            "only a successful Tag should be included in playtest analytics"
+        )
         expect(context.theftService._attempts[begun.attemptId].state == "RETURNED")
         expect(
             context.humanoids[context.thiefUserId].WalkSpeed == 0,
@@ -4320,6 +4476,19 @@ test(
         local phase = "PEACE"
         local now = 0
         local player = { UserId = userId, sessionId = "session-current-123", nearKiosk = true }
+        local telemetryEvents = {}
+        local telemetry = Telemetry.new({
+            clock = function()
+                return now
+            end,
+            write = function(event)
+                table.insert(telemetryEvents, cloneTable(event))
+            end,
+        })
+        assert(
+            telemetry:startSession(userId, player.sessionId, now, dataService:getSnapshot(userId)),
+            "test session should start telemetry"
+        )
         assert(
             economyService:startPlayer(player),
             "action player should publish initial economy state"
@@ -4363,6 +4532,9 @@ test(
                     table.insert(domainEvents, event)
                 end,
             },
+            emitAnalytics = function(user, event, properties, creatureId)
+                return telemetry:record(user, event, properties, creatureId)
+            end,
             clock = function()
                 return now
             end,
@@ -4388,6 +4560,19 @@ test(
             "valid request should charge and award once"
         )
         assert(#domainEvents == 2, "successful purchase should emit creature and Scrap events")
+        local firstCapsuleCount = 0
+        local capsulePurchaseCount = 0
+        for _, event in telemetryEvents do
+            if event.event == "first_capsule" then
+                firstCapsuleCount += 1
+            elseif event.event == "capsule_purchased" then
+                capsulePurchaseCount += 1
+            end
+        end
+        assert(
+            firstCapsuleCount == 1 and capsulePurchaseCount == 1,
+            "successful server purchase should produce one telemetry event and one first-capsule event"
+        )
         assert(
             published[#published].scrap == 130,
             "capsule purchase should immediately publish its balance"
@@ -4398,6 +4583,19 @@ test(
             "replay should return cached result"
         )
         assert(#domainEvents == 2, "replay must not emit duplicate domain events")
+        firstCapsuleCount = 0
+        capsulePurchaseCount = 0
+        for _, event in telemetryEvents do
+            if event.event == "first_capsule" then
+                firstCapsuleCount += 1
+            elseif event.event == "capsule_purchased" then
+                capsulePurchaseCount += 1
+            end
+        end
+        assert(
+            firstCapsuleCount == 1 and capsulePurchaseCount == 1,
+            "request replay must not duplicate telemetry"
+        )
         assert(dataService:getSnapshot(userId).scrap == 130, "replay must not charge twice")
         assert(
             #dataService:getSnapshot(userId).creatures == 2,
@@ -4571,6 +4769,108 @@ test("ActionService contains a client response send error after disconnect", fun
     service:stop()
     assert(disconnected, "stopping ActionService should disconnect its event listener")
 end)
+
+test(
+    "playtest telemetry records bounded progression and loss outcomes without player IDs",
+    function()
+        local now = 10
+        local events = {}
+        local telemetry = Telemetry.new({
+            clock = function()
+                return now
+            end,
+            write = function(event)
+                table.insert(events, cloneTable(event))
+            end,
+        })
+        local profile = {
+            creatures = { { id = "starter-id" } },
+            welcomeCreatureId = nil,
+            tutorialCompleted = false,
+            hasCompletedFirstRaid = false,
+            firstRaidParticipation = nil,
+            slotCapacity = 2,
+        }
+        assert(telemetry:startSession(9001, "session-anonymous-01", now, profile))
+        now = 20
+        assert(
+            telemetry:record(
+                9001,
+                "capsule_purchased",
+                { kind = "Welcome", rarity = "Uncommon" },
+                "welcome-id"
+            )
+        )
+        local eventCountBeforeRejectedPayload = #events
+        assert(not telemetry:record(9001, "capsule_purchased", {
+            kind = "Standard",
+            rarity = "Rare",
+            playerUserId = 9001,
+        }), "event schema must reject account IDs and arbitrary properties")
+        assert(
+            #events == eventCountBeforeRejectedPayload,
+            "rejected event payloads must not reach the writer"
+        )
+        assert(telemetry:record(9001, "tutorial_mutation_completed", { theme = "Moss" }))
+        assert(telemetry:record(9001, "slot_upgraded", { capacity = 3 }))
+        assert(telemetry:record(9001, "first_raid_participated", { reason = "raid_start" }))
+        assert(telemetry:record(9001, "first_raid_completed", {}))
+        now = 50
+        assert(
+            telemetry:record(
+                9001,
+                "creature_lost",
+                { rarity = "Rare", hasMutation = true },
+                "welcome-id"
+            )
+        )
+        now = 95
+        assert(telemetry:endSession(9001))
+        assert(not telemetry:endSession(9001), "ending a session twice must be idempotent")
+        local eventIndex = {}
+        for _, event in events do
+            assert(
+                event.sessionId == "session-anonymous-01",
+                "events should use the anonymous session token"
+            )
+            assert(event.elapsedSeconds >= 0, "elapsed time should be non-negative")
+            assert(
+                event.userId == nil and event.playerUserId == nil,
+                "events must omit account IDs"
+            )
+            eventIndex[event.event] = event
+        end
+        assert(
+            eventIndex.first_capsule.elapsedSeconds == 10,
+            "first capsule timing should be recorded"
+        )
+        assert(
+            eventIndex.first_mutation.elapsedSeconds == 10,
+            "first mutation timing should be recorded"
+        )
+        assert(eventIndex.slot3_purchased.elapsedSeconds == 10, "Slot 3 timing should be recorded")
+        assert(
+            eventIndex.first_raid_participated.elapsedSeconds == 10,
+            "first Raid timing should be recorded"
+        )
+        assert(
+            eventIndex.creature_lost.properties.ownedSeconds == 30,
+            "owned time should be measured"
+        )
+        assert(
+            eventIndex.session_ended.properties.durationSeconds == 85,
+            "session duration should be recorded"
+        )
+        assert(
+            eventIndex.session_ended.properties.lossToExitSeconds == 45,
+            "loss exit time should be recorded"
+        )
+        assert(
+            eventIndex.session_ended.properties.lossRarity == "Rare",
+            "loss rarity should be recorded"
+        )
+    end
+)
 
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then

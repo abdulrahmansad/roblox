@@ -35,6 +35,13 @@ local RAID_ACTIONS = {
     Tag = true,
     RecoverDroppedCreature = true,
 }
+local SCRAP_FLOW_BY_ACTION = {
+    PurchaseCapsule = { key = "sink", value = "capsule" },
+    SellCreature = { key = "source", value = "sale" },
+    PurchaseSlot = { key = "sink", value = "slot" },
+    PurchaseCatalyst = { key = "sink", value = "catalyst" },
+    StartMutation = { key = "sink", value = "mutation" },
+}
 local ACTION_RATE = {
     PurchaseCapsule = { capacity = 2, refillPerSecond = 2 },
     SellCreature = { capacity = 2, refillPerSecond = 2 },
@@ -173,6 +180,7 @@ function ActionService.new(options: any)
         _requestEvent = options.requestEvent,
         _resultEvent = options.resultEvent,
         _domainEvent = options.domainEvent,
+        _emitAnalytics = options.emitAnalytics,
         _kioskPart = options.kioskPart,
         _mutationStationPart = options.mutationStationPart,
         _clock = options.clock or os.clock,
@@ -489,6 +497,11 @@ function ActionService.handle(self: any, player: any, request: any): any?
         return self:_response(session, requestId, false, "RateLimited", nil, nil)
     end
 
+    local flow = SCRAP_FLOW_BY_ACTION[request.action]
+    local profileBefore = if flow ~= nil
+        then self._playerDataService:getSnapshot(session.userId)
+        else nil
+    local scrapBefore = if type(profileBefore) == "table" then profileBefore.scrap else nil
     local ok, data, errorCode = self:_dispatch(player, request, session)
     if errorCode ~= nil and STABLE_ERROR_CODES[errorCode] ~= true then
         errorCode = "Unavailable"
@@ -511,6 +524,49 @@ function ActionService.handle(self: any, player: any, request: any): any?
     local response =
         self:_response(session, requestId, ok, if ok then nil else errorCode, data, revision)
     self:_cacheResponse(cache, requestId, request, response)
+
+    if ok and type(self._emitAnalytics) == "function" then
+        if request.action == "PurchaseCapsule" then
+            pcall(
+                self._emitAnalytics,
+                session.userId,
+                "capsule_purchased",
+                { kind = data.kind, rarity = data.rarity },
+                data.creature.id
+            )
+        elseif request.action == "CompleteTutorialMutation" then
+            pcall(self._emitAnalytics, session.userId, "tutorial_mutation_completed", {
+                theme = data.themeId,
+            })
+        elseif request.action == "PurchaseSlot" then
+            pcall(self._emitAnalytics, session.userId, "slot_upgraded", {
+                capacity = data.slotCapacity,
+            })
+        elseif request.action == "StartMutation" then
+            pcall(self._emitAnalytics, session.userId, "mutation_rolled", {
+                tier = data.tier,
+                rarePityActive = data.oddsSnapshot.rareGuaranteeActive,
+            })
+        end
+        if
+            flow ~= nil
+            and type(scrapBefore) == "number"
+            and type(data.scrapBalance) == "number"
+        then
+            local delta = data.scrapBalance - scrapBefore
+            if delta > 0 and flow.key == "source" then
+                pcall(self._emitAnalytics, session.userId, "scrap_earned", {
+                    source = flow.value,
+                    amount = delta,
+                })
+            elseif delta < 0 and flow.key == "sink" then
+                pcall(self._emitAnalytics, session.userId, "scrap_spent", {
+                    sink = flow.value,
+                    amount = -delta,
+                })
+            end
+        end
+    end
 
     if ok and MUTATING_ACTIONS[request.action] then
         pcall(function()
