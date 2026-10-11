@@ -12,12 +12,12 @@ The V1 design and architecture are locked. M1–M9 portable implementation is co
 | M12 release readiness | **PREPARATION ONLY** | Checklist below is unsigned. M12 depends on M7–M11 acceptance, live persistence, support ownership, current platform/account review, and rollback rehearsal. |
 | Rojo configuration/build | **PASS** | `default.project.json` builds through the canonical verification script. |
 | Git | **SAFE STATE** | Verified M10 telemetry commit `0784779c81303cbe31062b7c941984c1cfa0b1aa` and the offline playtest-summary slice are pushed to `origin/main`; no force push or history rewrite was used. |
-| Studio status | **HUMAN CHECK REQUIRED** | Studio was rechecked during M10 and remains absent from process, PATH, and inspected install locations. No Studio, device, multiplayer, or live DataStore success is claimed. |
+| Studio status | **INSTALLER AWAITING UI CONFIRMATION** | The official Roblox Studio installer is open. Its Authenticode signature was verified as Roblox Corporation; Studio itself is not installed yet. Native app controls are unavailable in this session, so the account owner must click **Install** in the installer window. No Studio, device, multiplayer, or live DataStore success is claimed. |
 
 ## Human action to unblock M10
 
-1. Install and sign in to Roblox Studio on this machine, then install the Rojo 7 Studio plugin.
-2. From the repository root, run `./scripts/serve.ps1` and connect the plugin to `localhost:34872`.
+1. Click **Install** in the already-open Roblox Studio Installer. Once Studio opens, sign in to the Roblox account used for development. The installer was downloaded from Roblox's official CDN and its signature was verified before launch.
+2. After Studio is installed, run `rojo plugin install` from the repository root. The canonical `./scripts/serve.ps1` server is already running and returns HTTP 200 at `localhost:34872`; connect the plugin to it.
 3. Follow [tests/multiplayer/README.md](tests/multiplayer/README.md): run the 2-client interaction/race scenarios, then 6–8-client join/leave checks; use representative phone/tablet emulation; save server Output containing `[OddlingsAnalytics]` lines to `C:\playtest\server-output.txt` and summarize it with `./scripts/summarize-playtest.ps1 -Path C:\playtest\server-output.txt`. Review the summary with observer notes; it reports metrics but does not make qualitative gate decisions.
 4. Use a safe test experience/store for live persistence validation. Do not connect Studio testing to production player data.
 5. Return the playtest results and any console errors. The local canonical command to rerun afterward is `./scripts/verify.ps1`.
