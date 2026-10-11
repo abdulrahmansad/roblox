@@ -3,7 +3,7 @@
 -- unpublished-place volatile datastore adapter is active.
 local PlayerIdentity = {}
 
-local MAX_PROFILE_USER_ID = 2_147_483_647
+local MAX_STUDIO_PROFILE_USER_ID = 2_147_483_647
 local MAX_STUDIO_TEST_CLIENTS = 8
 
 local function isPlayerCandidate(player: any): boolean
@@ -22,7 +22,7 @@ function PlayerIdentity.resolve(player: any, allowStudioTestUsers: boolean?): nu
     end
 
     local userId = player.UserId
-    if type(userId) ~= "number" or userId % 1 ~= 0 or userId > MAX_PROFILE_USER_ID then
+    if type(userId) ~= "number" or userId % 1 ~= 0 then
         return nil
     end
 
@@ -34,9 +34,9 @@ function PlayerIdentity.resolve(player: any, allowStudioTestUsers: boolean?): nu
         return nil
     end
 
-    -- Keep the mapping inside the profile schema's valid range. It is only used
-    -- with the process-local Studio datastore and is never published or saved.
-    return MAX_PROFILE_USER_ID + userId + 1
+    -- Keep synthetic values in a bounded positive range. They are only used
+    -- with the process-local Studio datastore and are never published or saved.
+    return MAX_STUDIO_PROFILE_USER_ID + userId + 1
 end
 
 return table.freeze(PlayerIdentity)

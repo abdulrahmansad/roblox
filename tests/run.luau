@@ -1152,10 +1152,17 @@ test("unpublished Studio identities support isolated local multiplayer sessions"
     local player = newPlayer(-1)
     local syntheticUserId = resolveUserId(player)
     expect(syntheticUserId == 2_147_483_647)
+    local mappedUserIds = {}
+    for localUserId = -1, -8, -1 do
+        local mappedUserId = PlayerIdentity.resolve(newPlayer(localUserId), true)
+        expect(mappedUserId ~= nil and mappedUserIds[mappedUserId] ~= true)
+        mappedUserIds[mappedUserId] = true
+    end
     expect(PlayerIdentity.resolve(newPlayer(-8), true) == 2_147_483_640)
     expect(PlayerIdentity.resolve(newPlayer(-9), true) == nil)
     expect(PlayerIdentity.resolve(newPlayer(-1), false) == nil)
     expect(PlayerIdentity.resolve(newPlayer(501), false) == 501)
+    expect(PlayerIdentity.resolve(newPlayer(3_000_000_000), false) == 3_000_000_000)
     expect(PlayerIdentity.resolve(newPlayer(0), true) == nil)
 
     local baseService = BaseService.new({ baseCount = 1, resolveUserId = resolveUserId })
