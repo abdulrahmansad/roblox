@@ -1327,6 +1327,21 @@ test("M8 HUD summarizes income, first-session goals, rarity labels, and action f
     expect(not HudModel.isSameRaidPresentationState(raidPresentationState, refreshedRaidClock))
     expect(HudModel.getToastOffsetY(true) == 306)
     expect(HudModel.getToastOffsetY(false) == 190)
+    local landscapeMenu = HudModel.getMenuPanelLayout(390)
+    expect(
+        landscapeMenu.anchorY == 0.5
+            and landscapeMenu.positionYScale == 0.46
+            and landscapeMenu.height == 280,
+        "short phone viewports center the Commons panel within the screen"
+    )
+    local portraitMenu = HudModel.getMenuPanelLayout(844)
+    expect(
+        portraitMenu.anchorY == 1
+            and portraitMenu.positionYScale == 1
+            and portraitMenu.positionYOffset == -168
+            and portraitMenu.height == 332,
+        "tall phone viewports retain the established panel layout"
+    )
 
     profile.creatures[1].mutationFormId = "Cinder"
     expect(HudModel.getIncomePerMinute(profile.creatures) == 50)

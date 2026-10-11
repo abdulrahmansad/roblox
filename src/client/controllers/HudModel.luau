@@ -18,6 +18,10 @@ HudModel.MIN_TOUCH_TARGET_PX = 56
 local TOAST_INTRO_OFFSET_PX = 306
 local TOAST_NORMAL_OFFSET_PX = 190
 local HOLD_CONTEXT_MODES = { STEAL = true, BANK = true, RECOVER = true }
+local MENU_PANEL_HEIGHT = 332
+local COMPACT_MENU_PANEL_HEIGHT = 280
+local MIN_COMPACT_MENU_PANEL_HEIGHT = 256
+local COMPACT_MENU_VIEWPORT_HEIGHT = 500
 
 local RARITIES = {
     Common = { icon = "●", color = "Common" },
@@ -125,6 +129,29 @@ end
 
 function HudModel.getToastOffsetY(introVisible: boolean): number
     return if introVisible then TOAST_INTRO_OFFSET_PX else TOAST_NORMAL_OFFSET_PX
+end
+
+function HudModel.getMenuPanelLayout(viewportHeight: number): any
+    local height = if type(viewportHeight) == "number" and viewportHeight > 0
+        then viewportHeight
+        else 768
+    if height < COMPACT_MENU_VIEWPORT_HEIGHT then
+        return {
+            anchorY = 0.5,
+            positionYScale = 0.46,
+            positionYOffset = 0,
+            height = math.min(
+                COMPACT_MENU_PANEL_HEIGHT,
+                math.max(MIN_COMPACT_MENU_PANEL_HEIGHT, height - 32)
+            ),
+        }
+    end
+    return {
+        anchorY = 1,
+        positionYScale = 1,
+        positionYOffset = -168,
+        height = MENU_PANEL_HEIGHT,
+    }
 end
 
 function HudModel.getRarityPresentation(rarity: any): any

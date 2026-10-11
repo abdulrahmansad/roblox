@@ -19,7 +19,7 @@ Current manual smoke:
 
    The first response must have `accepted = true`; the second must have `accepted = false` and reason `MalformedRequest`. Do not expose debug exploit controls to published clients.
 
-Roblox currently also documents `StudioTestService` for plugin-driven multiplayer test sessions, adding players mid-test, disconnecting clients, and ending a test from the server. Add an automated Studio plugin harness when gameplay scenarios exist; there is no gameplay to exercise yet.
+Roblox also documents `StudioTestService` for plugin-driven multiplayer test sessions, adding players mid-test, disconnecting clients, and ending a test from the server. M5–M9 gameplay scenarios now exist, but an automated Studio plugin harness has not been added. Use the manual scenarios below; keep Studio multiplayer coverage marked pending until a session actually runs.
 
 ## M5 Raid clock and arrival grace
 
@@ -27,11 +27,11 @@ After starting a two-client session, confirm both clients show the same phase an
 
 ## M8 onboarding and mobile presentation
 
-After syncing with Rojo, use Studio's device emulator at representative phone sizes such as 360×800 and 390×844. Confirm the phase/economy HUD, one goal card, theme choice, commerce/mutation panel, and contextual action control fit without covering the main interaction area. Check that primary controls are at least 52 px tall, readable with touch, and usable without precision aiming. Verify the hold ring advances for theft, bank, and recovery; theft cancels on early release, while bank/recovery progress resets after movement beyond the server's 0.5-stud stationary tolerance. Check keyboard E/Q and touch behavior for the same contextual actions.
+After syncing with Rojo, use Studio's Device Simulator at representative phone sizes such as 360×800 and 390×844, plus short landscape sizes such as 800×360 and 844×390. Rotate while the Commons panel is open and confirm its title, Close control, and action rows stay visible. Confirm the phase/economy HUD, one goal card, theme choice, commerce/mutation panel, and contextual action control fit without covering the main interaction area. Check that primary controls are at least 52 px tall, readable with touch, and usable without precision aiming. Verify the hold ring advances for theft, bank, and recovery; theft cancels on early release, while bank/recovery progress resets after movement beyond the server's 0.5-stud stationary tolerance. Check keyboard E/Q and touch behavior for the same contextual actions.
 
 With two clients, complete the free mutation and Welcome flow, then exercise a theft channel, early release, carry, Tag/drop, owner recovery, and bank. Confirm captions explain important events even when audio is muted. Inspect the recovery marker on the owner and thief clients and confirm a third client never receives the target position. Repeat with a client joining during RAID and confirm grace is visible without changing the shared countdown. Portable tests cover the server-side rules and event privacy. Studio is installed and connected, and the unpublished local server starts using the explicit volatile store. Two local test clients crashed with graphics driver error `0x887a0020` (`OutOfMemoryGraphics`) before joining, so these checks remain pending.
 
-Future scenarios: two-player interaction, ownership and proximity checks, duplicate/replayed requests, disconnect during interaction, race conditions, dropped items, join during an event, and 6–8-client mobile performance.
+Additional scenarios still to execute in Studio: two-player interaction, ownership and proximity checks, duplicate/replayed requests, disconnect during interaction, race conditions, dropped items, join during an event, and 6–8-client mobile performance.
 
 ## M10 playtest evidence
 

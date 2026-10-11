@@ -483,6 +483,16 @@ local function buildUi(parentGui: ScreenGui)
     root.Parent = parentGui
     rootFrame = root
 
+    local function updateMenuPanelLayout()
+        if rootFrame == nil or menuPanel == nil then
+            return
+        end
+        local layout = HudModel.getMenuPanelLayout(rootFrame.AbsoluteSize.Y)
+        menuPanel.AnchorPoint = Vector2.new(0.5, layout.anchorY)
+        menuPanel.Position = UDim2.new(0.5, 0, layout.positionYScale, layout.positionYOffset)
+        menuPanel.Size = UDim2.new(1, -24, 0, layout.height)
+    end
+
     introCard =
         makePanel(root, "FirstSessionChoice", UDim2.new(0.5, 0, 0, 124), UDim2.new(1, -24, 0, 176))
     introCard.Visible = false
@@ -647,8 +657,9 @@ local function buildUi(parentGui: ScreenGui)
 
     menuPanel =
         makePanel(root, "InteractionPanel", UDim2.new(0.5, 0, 1, -168), UDim2.new(1, -24, 0, 332))
-    menuPanel.AnchorPoint = Vector2.new(0.5, 1)
     menuPanel.Visible = false
+    updateMenuPanelLayout()
+    addConnection(root:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateMenuPanelLayout))
     menuTitle = makeLabel(
         menuPanel,
         "PanelTitle",
