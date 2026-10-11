@@ -24,6 +24,8 @@ local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitio
 local CreatureVisualDefinitions = require("../src/shared/definitions/CreatureVisualDefinitions")
 local MutationDefinitions = require("../src/shared/definitions/MutationDefinitions")
 local Telemetry = require("../src/server/analytics/Telemetry")
+local StudioMemoryDataStoreService =
+    require("../src/server/persistence/StudioMemoryDataStoreService")
 
 local passed = 0
 local failed = 0
@@ -1583,6 +1585,59 @@ test("profile validation rejects corrupt fields and unknown schema versions", fu
         "duplicate creature IDs must be rejected"
     )
 end)
+
+test(
+    "unpublished Studio selects volatile stores and preserves their scoped data contract",
+    function()
+        expect(
+            StudioMemoryDataStoreService.isUnpublishedStudioSession(true, 0, 0),
+            "unpublished Studio should use volatile stores"
+        )
+        expect(
+            not StudioMemoryDataStoreService.isUnpublishedStudioSession(false, 0, 0),
+            "live servers must never use volatile stores"
+        )
+        expect(
+            not StudioMemoryDataStoreService.isUnpublishedStudioSession(true, 1, 0),
+            "published places must use Roblox DataStores"
+        )
+        expect(
+            not StudioMemoryDataStoreService.isUnpublishedStudioSession(true, 0, 1),
+            "universe identity must also be absent for volatile stores"
+        )
+
+        local service = StudioMemoryDataStoreService.new()
+        local profileStore = service:GetDataStore("OddlingsPlayerData")
+        expect(
+            profileStore == service:GetDataStore("OddlingsPlayerData"),
+            "repeated store lookup should retain the same session-local store"
+        )
+
+        local stored, keyInfo = profileStore:UpdateAsync("Player_501", function(current)
+            expect(current == nil, "the first write should receive an empty key")
+            return { scrap = 50 }, { 501 }, { revision = 1 }
+        end)
+        expect(stored.scrap == 50, "UpdateAsync should store and return a cloned value")
+        expect(keyInfo:GetMetadata().revision == 1, "key metadata should be retained")
+        expect(keyInfo:GetUserIds()[1] == 501, "key user IDs should be retained")
+
+        stored.scrap = 1
+        expect(profileStore:GetAsync("Player_501").scrap == 50, "reads must not mutate stored data")
+
+        local cancelled = profileStore:UpdateAsync("Player_501", function()
+            return nil
+        end)
+        expect(cancelled == nil, "a nil transform result should cancel the update")
+        expect(
+            profileStore:GetAsync("Player_501").scrap == 50,
+            "a cancelled update must keep the old value"
+        )
+        expect(
+            service:GetDataStore("OddlingsTransferJournal"):GetAsync("Player_501") == nil,
+            "different logical stores must have isolated records"
+        )
+    end
+)
 
 test("profile store atomically locks, saves, releases, and reloads one profile", function()
     local dataStore = makeFakeDataStore()

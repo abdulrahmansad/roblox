@@ -22,6 +22,8 @@ local TagService = require(ServerScriptService.Server.services.TagService)
 local ActionService = require(ServerScriptService.Server.services.ActionService)
 local ProfileStore = require(ServerScriptService.Server.persistence.ProfileStore)
 local TransferJournalStore = require(ServerScriptService.Server.persistence.TransferJournalStore)
+local StudioMemoryDataStoreService =
+    require(ServerScriptService.Server.persistence.StudioMemoryDataStoreService)
 local EconomyConfig = require(ReplicatedStorage.Shared.config.EconomyConfig)
 local RequestGuard = require(ServerScriptService.Server.security.RequestGuard)
 local Telemetry = require(ServerScriptService.Server.analytics.Telemetry)
@@ -76,8 +78,21 @@ local baseService = BaseService.new({
     baseCount = Constants.BASE_COUNT,
     world = Workspace,
 })
+local dataStoreService: any = DataStoreService
+if
+    StudioMemoryDataStoreService.isUnpublishedStudioSession(
+        RunService:IsStudio(),
+        game.PlaceId,
+        game.GameId
+    )
+then
+    dataStoreService = StudioMemoryDataStoreService.new()
+    warn(
+        "[Foundation] Unpublished Studio session uses volatile in-memory data; progress will not persist."
+    )
+end
 local profileStore = ProfileStore.new({
-    store = DataStoreService:GetDataStore("OddlingsPlayerData"),
+    store = dataStoreService:GetDataStore("OddlingsPlayerData"),
     validate = PlayerDataService.validateProfile,
     clock = os.time,
     generateToken = function()
@@ -88,7 +103,7 @@ local profileStore = ProfileStore.new({
     maxAttempts = EconomyConfig.STORE_MAX_ATTEMPTS,
 })
 local transferJournalStore = TransferJournalStore.new({
-    store = DataStoreService:GetDataStore("OddlingsTransferJournal"),
+    store = dataStoreService:GetDataStore("OddlingsTransferJournal"),
 })
 playerDataService = PlayerDataService.new({
     profileStore = profileStore,

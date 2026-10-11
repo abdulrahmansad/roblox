@@ -65,6 +65,8 @@ Clients may depend on shared modules. Server modules may depend on shared module
 
 `src/server/analytics/Contracts.luau` defines a provider-neutral internal event boundary. `src/server/monetization/Contracts.luau` defines the future receipt handler/result boundary. Neither connects to external services or grants products in this phase.
 
+For an unpublished Studio place only (`RunService:IsStudio()` and both `game.PlaceId` and `game.GameId` are zero), `Bootstrap.server.luau` selects `StudioMemoryDataStoreService`. This adapter preserves the `GetAsync`/`UpdateAsync` store contract within that Studio process and warns that data is volatile. Published places, including published places opened in Studio, continue to use Roblox DataStores. This local path supports gameplay smoke tests; it does not validate live DataStore behavior or save data between sessions.
+
 ## State and test ownership
 
 [STATE_MACHINES.md](STATE_MACHINES.md) is the source of truth for Raid, theft, mutation, and Welcome participation transitions. [TESTING.md](TESTING.md) maps required tests to domain services, persistence, and Studio. Every gameplay service must have deterministic unit/service tests before its Studio integration scenarios; portable Lune is not multiplayer simulation.

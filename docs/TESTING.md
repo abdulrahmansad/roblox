@@ -2,7 +2,7 @@
 
 ## Local checks
 
-`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, the offline playtest-summary fixture checks, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, M9 visual catalogs/map/Codex/audio, and M10 playtest telemetry. The latest full run passed 87 Lune tests and the summarizer fixture assertions with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
+`./scripts/verify.ps1` runs formatting validation, Selene, the Lune test suite, the offline playtest-summary fixture checks, and a Rojo place build. The current portable suite covers protocol/action validation, base/session lifecycle, profile defaults, save retries, backups/quarantine, session leases, transfer-journal recovery, online income events, M3 capsule odds/pity/capacity, M4 mutation catalogs and transactions, M5 Raid timing and arrival grace, M6 theft/Tag/recovery and Welcome participation, M8 HUD goals and feedback copy, M9 visual catalogs/map/Codex/audio, and M10 playtest telemetry. The latest full run passed 88 Lune tests and the summarizer fixture assertions with zero lint issues and a successful Rojo build; Lune does not simulate Roblox Studio or multiplayer.
 
 TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox engine behavior. `tests/testez.yml` identifies the discovery roots and `selene.toml` enables TestEZ globals. Studio/TestEZ execution is not available on machines without Roblox Studio.
 
@@ -59,6 +59,6 @@ These are required cases for the listed milestones. M1–M9 portable coverage is
 | M10 telemetry | Allowlisted server events for progression timing, economy flows, first-Raid participation/completion, arrival-grace eligibility, starter/Welcome/grace protection checks, theft outcomes, and loss-to-exit; no account IDs or client payloads in output. | Portable boundary tests; private Studio session aggregation pending |
 | Monetization | Future pass entitlement refresh and receipt/purchase path are server-owned, idempotent, retry-safe, and cosmetic-only. This readiness phase creates no product IDs or remotes. | Service integration + Studio; M11 |
 
-The complete milestone-to-test mapping is in [MILESTONES.md](MILESTONES.md). Studio-only coverage remains pending until Studio is installed and signed in.
+The complete milestone-to-test mapping is in [MILESTONES.md](MILESTONES.md). Studio is installed, and the Rojo connection and unpublished-place server boot have been verified. Two local test clients crashed with graphics driver error `0x887a0020` (`OutOfMemoryGraphics`) before joining. Studio-only client, mobile, multiplayer, and live DataStore coverage remain pending.
 
 Add tests alongside behavior; do not create always-pass placeholders.
