@@ -42,7 +42,7 @@ Roblox Studio was rechecked during M10 and remains unavailable: no Studio proces
 
 ## Remaining work
 
-M10 remains open for human-run Studio sessions and measured playtest evidence. M11 cannot begin until M10's gameplay gates are accepted, then requires account-side Game Pass setup. M12 depends on M7–M11 and remains pending; the release checklist is prepared but unsigned. M0–M9 engine-backed checks, 2-client and 6–8-player validation, mobile/device testing, live DataStore validation, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
+M10 remains open for human-run Studio sessions and measured playtest evidence. M11 cannot begin until M10's gameplay gates are accepted, then requires account-side Game Pass setup. M12 depends on M7–M11 and remains pending; the release checklist and incident/rollback runbook are prepared but unsigned and unrehearsed. M0–M9 engine-backed checks, 2-client and 6–8-player validation, mobile/device testing, live DataStore validation, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
 
 ## Git
 

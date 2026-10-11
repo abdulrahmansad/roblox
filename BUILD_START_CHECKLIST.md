@@ -38,4 +38,32 @@ After M10 is accepted, M11 requires the account owner to create the approved 99 
 - [ ] Release candidate commit, rollback revision/procedure, and support owner are recorded.
 - [ ] Public release decision is reviewed and explicitly authorized separately.
 
+## Prepared incident and rollback runbook — not rehearsed
+
+This procedure is ready for a named release owner to adopt. No public release or rollback has been performed.
+
+### Before any release
+
+- Record the release Git commit, successful verification output, Rojo build, private Studio result, and matching saved/published place version in one release note.
+- Save Roblox place checkpoints with version notes so the last known-good version is identifiable in [Roblox Version History](https://create.roblox.com/docs/projects/version-history).
+- Name one support/release owner and an account backup who can access the experience and its version history. Record names and private contact details outside this repository.
+- Keep an isolated test experience/store for Studio and persistence checks. Never point a test place at production player data.
+- Complete the current Roblox Maturity & Compliance Questionnaire accurately before a public release and review Roblox's [safety guidance](https://create.roblox.com/docs/safety). V1 adds no custom user-created content or trading system; confirm final platform chat settings, review the fixed theft/chase loop for abuse reports, and make the player-facing rules understandable without adding unapproved gameplay systems.
+
+### Incident intake and triage
+
+1. Record UTC time, place/version, Git commit, server/client context, observed behavior, exact reproduction steps, severity, and whether progression may be affected.
+2. Treat suspected duplication, permanent loss, client-authority bypass, or broad service failure as release-stopping. Stop further rollout and preserve the private test evidence before changing code or data.
+3. Keep raw Roblox logs, account/player identifiers, and private contact details in access-controlled support records, never in Git issues or committed fixtures. The local playtest summary omits session tokens; it is diagnostic evidence, not a player support record.
+4. For an isolated UI/audio issue, record device, viewport, input method, and reproduction. For a safety report, preserve the minimum evidence needed and use the account owner's Roblox moderation/reporting workflow.
+5. Assign an owner and next review time; close an incident only after a verified fix or documented disposition.
+
+### Rollback procedure
+
+1. Identify the last known-good Git commit and matching Roblox place version from the release note. Confirm whether the failure is in source, the published place, or persisted player data; a code rollback does not reverse saved player data.
+2. For a source regression, create a new `git revert` commit on the release branch (never rewrite or force-push published history), run `./scripts/verify.ps1`, rebuild with Rojo, and validate the reverted build in a private Studio session.
+3. For a published place regression, the account owner restores the recorded place version through Studio or Creator Dashboard Version History. Roblox documents that restore creates a new place version and does not publish it automatically; if the experience is public, the owner must separately publish the restored version and restart servers. Do not perform this account-side action without the separately authorized release decision.
+4. If persisted data may be affected, do not overwrite profiles or assume a place rollback restores player data. Freeze writes to the affected test and preserve version/time evidence. Use M7 transfer-journal replay only for an in-progress theft; wait for a separately reviewed DataStore recovery plan before resuming other writes.
+5. Run the server/client smoke, persistence checks, and affected regression cases in the private test place; record the result, restored place version, and follow-up owner. Reopen a public rollout only after explicit release-owner approval.
+
 **Current verdict: NOT READY FOR RELEASE.** M10 empirical gates are open; M11 and M12 are not accepted.

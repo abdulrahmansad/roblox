@@ -156,3 +156,4 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Acceptance:** No open release-blocking defect; checklist is signed off with evidence; rollback and support owner are known; Creator Rewards terms/eligibility are verified at that time and never assumed as revenue.
 - **Docs:** `BUILD_START_CHECKLIST.md` evolves into release checklist; `TOOLING.md`, `TESTING.md`, `MONETIZATION.md`, `PROJECT_STATUS.md`.
 - **Commit boundary:** One release-readiness commit for checklists and evidence; publishing the experience is a separate explicitly authorized action.
+- **Current evidence:** The release checklist now includes incident intake, triage, source/place rollback steps, data-integrity cautions, and current Roblox Version History/safety references. It is preparation only: no rollback was rehearsed, no support owner was named, and M7–M11/live Studio and Creator Hub gates remain incomplete.
