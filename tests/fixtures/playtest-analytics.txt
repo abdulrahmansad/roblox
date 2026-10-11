@@ -1,0 +1,25 @@
+Studio output line that is not an analytics event
+[OddlingsAnalytics] {"event":"session_started","sessionId":"fixture-session-0001","elapsedSeconds":0,"properties":{"newPlayer":true}}
+[OddlingsAnalytics] {"event":"first_mutation","sessionId":"fixture-session-0001","elapsedSeconds":25,"properties":{}}
+[OddlingsAnalytics] {"event":"first_capsule","sessionId":"fixture-session-0001","elapsedSeconds":90,"properties":{"kind":"Welcome","rarity":"Uncommon"}}
+[OddlingsAnalytics] {"event":"slot3_purchased","sessionId":"fixture-session-0001","elapsedSeconds":180,"properties":{}}
+[OddlingsAnalytics] {"event":"first_raid_participated","sessionId":"fixture-session-0001","elapsedSeconds":300,"properties":{"reason":"raid_start"}}
+[OddlingsAnalytics] {"event":"first_raid_completed","sessionId":"fixture-session-0001","elapsedSeconds":420,"properties":{}}
+[OddlingsAnalytics] {"event":"scrap_earned","sessionId":"fixture-session-0001","elapsedSeconds":10,"properties":{"source":"income","amount":100}}
+[OddlingsAnalytics] {"event":"scrap_spent","sessionId":"fixture-session-0001","elapsedSeconds":15,"properties":{"sink":"catalyst","amount":60}}
+[OddlingsAnalytics] {"event":"mutation_rolled","sessionId":"fixture-session-0001","elapsedSeconds":20,"properties":{"tier":"Rare","rarePityActive":true}}
+[OddlingsAnalytics] {"event":"theft_protection_check","sessionId":"fixture-session-0001","elapsedSeconds":350,"properties":{"role":"target","starterProtected":false,"welcomeProtected":true,"ownerArrivalGrace":false,"thiefArrivalGrace":false}}
+[OddlingsAnalytics] {"event":"creature_lost","sessionId":"fixture-session-0001","elapsedSeconds":360,"properties":{"rarity":"Rare","hasMutation":true,"ownedSeconds":600}}
+[OddlingsAnalytics] {"event":"tag_succeeded","sessionId":"fixture-session-0001","elapsedSeconds":365,"properties":{"outcome":"Dropped"}}
+[OddlingsAnalytics] {"event":"creature_recovered","sessionId":"fixture-session-0001","elapsedSeconds":370,"properties":{"rarity":"Rare"}}
+[OddlingsAnalytics] {"event":"session_ended","sessionId":"fixture-session-0001","elapsedSeconds":700,"properties":{"durationSeconds":700,"lossToExitSeconds":90,"lossRarity":"Rare"}}
+[OddlingsAnalytics] {"event":"session_started","sessionId":"fixture-session-0002","elapsedSeconds":0,"properties":{"newPlayer":false}}
+[OddlingsAnalytics] {"event":"arrival_grace_started","sessionId":"fixture-session-0002","elapsedSeconds":100,"properties":{}}
+[OddlingsAnalytics] {"event":"arrival_grace_expired","sessionId":"fixture-session-0002","elapsedSeconds":115,"properties":{"eligible":false}}
+[OddlingsAnalytics] {"event":"theft_banked","sessionId":"fixture-session-0002","elapsedSeconds":500,"properties":{"rarity":"Common","hasMutation":false}}
+[OddlingsAnalytics] {"event":"session_ended","sessionId":"fixture-session-0002","elapsedSeconds":600,"properties":{"durationSeconds":600}}
+[OddlingsAnalytics] {"event":"session_started","sessionId":"fixture-session-0003","elapsedSeconds":0,"properties":{"newPlayer":true}}
+[OddlingsAnalytics] {"event":"first_capsule","sessionId":"fixture-session-0003","elapsedSeconds":120,"properties":{"kind":"Welcome","rarity":"Uncommon"}}
+[OddlingsAnalytics] {"event":"future_event","sessionId":"fixture-session-0003","elapsedSeconds":130,"properties":{}}
+[OddlingsAnalytics] {"event":"session_started","sessionId":12,"elapsedSeconds":0,"properties":{"newPlayer":true}}
+[OddlingsAnalytics] invalid-json

@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$fixturePath = Join-Path $script:RepoRoot 'tests/fixtures/playtest-analytics.log'
+$fixturePath = Join-Path $script:RepoRoot 'tests/fixtures/playtest-analytics.txt'
 $summaryScript = Join-Path $PSScriptRoot 'summarize-playtest.ps1'
 $summaryJson = (& $summaryScript -Path $fixturePath | Out-String)
 $summary = $summaryJson | ConvertFrom-Json -ErrorAction Stop
