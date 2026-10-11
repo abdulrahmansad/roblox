@@ -75,6 +75,7 @@ function EconomyService.new(options: any)
         _wait = options.wait or defaultWait,
         _schedule = options.schedule or defaultSchedule,
         _publish = options.publish or publishLeaderboard,
+        _emitIncomeEvent = options.emitIncomeEvent,
         _interval = options.intervalSeconds or EconomyConfig.INCOME_INTERVAL_SECONDS,
         _active = {},
         _fractionalScrap = {},
@@ -333,6 +334,10 @@ function EconomyService.accrue(
         self._playerDataService:creditScrap(userId, wholeScrap)
     if not credited then
         return false, 0, balance, creditError
+    end
+    if amount > 0 and type(self._emitIncomeEvent) == "function" then
+        -- Presentation notifications must never interfere with a committed payout.
+        pcall(self._emitIncomeEvent, active.player, userId, amount, balance)
     end
     self:_publishCurrent(active.player, userId)
     return true, amount, balance, nil

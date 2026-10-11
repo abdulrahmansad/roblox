@@ -1,11 +1,12 @@
 # Project status
 
-Status: V1 implementation is in progress; **M8 — Onboarding and mobile UI** has passed portable verification and **M9 — MVP content and audio** is current. M1–M8 portable implementations are complete. Studio/device checks remain pending. The V1 design remains frozen.
+Status: V1 implementation is in progress; M1–M9 portable implementations pass the canonical local pipeline. **M10 — Balance and abuse playtest** is current. Studio/device validation remains pending, and the V1 design remains frozen.
 
-## Current milestone: M9 — MVP content and audio
+## Current milestone: M10 — Balance and abuse playtest
 
-- M8 adds the first-session theme choice and goal flow, a skippable guidance option that preserves the free mutation, compact Scrap/income/slots HUD, affordable capsule/mutation/slot/sale/catalyst controls, contextual raid interactions, touch/keyboard parity, radial hold progress, rarity/odds/error captions, and local dropped-creature recovery marker. `GetSnapshot` now returns a server-derived Welcome availability bit; drop positions are delivered privately to the involved players. Canonical verification passes formatting, Selene (0 issues), 84 Lune tests, and the Rojo build. Studio phone, touch, two-client, and device accessibility checks remain pending.
-- M9 will complete the locked map/content presentation and sound cues using the existing catalogs, rigs, and scope. No new gameplay systems are approved.
+- M8 adds the first-session theme choice and goal flow, skippable guidance that preserves the free mutation, compact economy HUD, contextual actions, radial hold progress, rarity/odds/error feedback, and the local dropped-creature marker. Studio phone, touch, two-client, and accessibility checks remain pending.
+- M9 adds the 12 species visual catalog across four shared rigs, 24 reusable mutation recipes, 36-entry on-demand Codex, compact 180-stud map routes/zone labels, local non-colliding stand models, feedback cues, reduced-effects controls, safe passive-income notifications, and the equipped-Mythic announcement. `CreatureChanged` now updates the local collection and Codex immediately after a bank. Canonical verification passes formatting, Selene (0 issues), 86 Lune tests, and the Rojo build. Studio model/material review, audio asset playback, phone readability, and multiplayer presentation remain pending.
+- M10 portable hostile review is underway. No balance values have been changed without playtest evidence; Studio playtest timing, loss/retention measurements, and 6–8-client behavior remain unavailable.
 
 ## M3 — Capsules, sales, and capacity
 
@@ -25,6 +26,7 @@ Status: V1 implementation is in progress; **M8 — Onboarding and mobile UI** ha
 - **M6 — Theft, Tag, recovery, and Welcome protection:** portable implementation passed 70 tests with formatting, lint, and Rojo build green. Coverage includes server-side holds/range, locks and limits, Tag/drop/recovery, Welcome participation and protection, strict Raid-end banking, transient/ambiguous journal responses, and ActionService replay. Studio multiplayer remains pending; no live Roblox DataStore claim is made. Commit `20586f9dc2db59c367a3222e8892cc891a1a6d8c` is pushed.
 - **M7 — Persistence hardening:** portable implementation passes 81 tests with formatting, lint, and Rojo build green. Coverage includes profile retries, revisioned backup/quarantine recovery, stale-backup rejection, future-version rejection, bounded transfer journal, PREPARED/COMMITTED replay, and shutdown during normal ownership, carry, and ambiguous bank commit. No earlier production schema exists under the locked version-1 data model, so no synthetic migration was created. Studio and live DataStore integration remain pending. Commit `683ec476c7ad5e8eb9240057170bb2427ad07247` is pushed.
 - **M8 — Onboarding and mobile UI:** portable implementation passes 84 tests with formatting, lint, and Rojo build green. Coverage includes HUD goals and skipped guidance, rarity/odds/error copy, the Welcome snapshot field, private dropped-position event delivery, and the exact completed theft-channel cancellation boundary. Roblox Studio phone emulation, touch controls, and two-client UI remain pending. Commit `4a074b2` is pushed to `origin/main`.
+- **M9 — MVP content and audio:** portable implementation passes 86 tests with formatting, lint, and Rojo build green. Coverage includes exact visual/Codex catalog counts, map extents, participant-only recovery details, positive committed income notification handling, bank ownership-change events, and equipped-Mythic announcement idempotency. Studio visual/material, audio-load, mobile readability, and multiplayer checks remain pending.
 
 ## Locked planning contracts
 
@@ -34,13 +36,13 @@ Status: V1 implementation is in progress; **M8 — Onboarding and mobile UI** ha
 
 ## Toolchain and Studio status
 
-Pinned tools: Rokit 1.2.0, Rojo 7.7.1, Wally 0.3.2, StyLua 2.5.2, Selene 0.32.0, and Lune 0.10.5. The current full verification passes, including Rojo build and 84 portable tests. The Rojo serve workflow was previously verified at `localhost:34872` with HTTP 200.
+Pinned tools: Rokit 1.2.0, Rojo 7.7.1, Wally 0.3.2, StyLua 2.5.2, Selene 0.32.0, and Lune 0.10.5. The current full verification passes, including Rojo build and 86 portable tests. The Rojo serve workflow was previously verified at `localhost:34872` with HTTP 200.
 
-Roblox Studio was rechecked during M8 and remains unavailable: no Studio process or executable is present on PATH or in the inspected install locations. Studio login and Rojo plugin status therefore cannot be checked. The human action is to install/sign in to Studio, install the Rojo 7 plugin, connect to `localhost:34872`, then run the M0–M8 Studio checks documented in [tests/multiplayer/README.md](../tests/multiplayer/README.md). This does not block the remaining portable milestones.
+Roblox Studio was rechecked during M9 and remains unavailable: no Studio process or executable is present on PATH or in the inspected install locations. Studio login and Rojo plugin status therefore cannot be checked. The human action is to install/sign in to Studio, install the Rojo 7 plugin, connect to `localhost:34872`, then run the M0–M9 Studio checks documented in [tests/multiplayer/README.md](../tests/multiplayer/README.md). This blocks only engine-backed visual/audio/mobile/multiplayer acceptance; remaining portable review continues.
 
 ## Remaining work
 
-M9–M12 remain: V1 map/content/audio, hostile playtest and balance, the approved cosmetic pass after gameplay gates, and release readiness. M0–M8 engine-backed checks, 6–8-player validation, mobile/device testing, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
+M10–M12 remain: evidence-backed hostile playtesting and balance, the approved cosmetic pass only after gameplay gates, and release readiness. M0–M9 engine-backed checks, 2-client and 6–8-player validation, mobile/device testing, live DataStore validation, and account-side Game Pass setup remain unverified or pending. No full-game, multiplayer, mobile, security, or release-readiness claim is made.
 
 ## Git
 

@@ -7,8 +7,11 @@ local CreatureDefinitions = if game ~= nil
 local EconomyConfig = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.config.EconomyConfig)
     else require("../../shared/config/EconomyConfig")
+local WorldConfig = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.config.WorldConfig)
+    else require("../../shared/config/WorldConfig")
 
-local DEFAULT_BASE_COUNT = 8
+local DEFAULT_BASE_COUNT = WorldConfig.BASE_COUNT
 local DEFAULT_SLOT_CAPACITY = EconomyConfig.STARTER_SLOT_CAPACITY
 local MAX_SLOT_CAPACITY = EconomyConfig.MAX_SLOT_CAPACITY
 local STAND_OFFSETS = {
@@ -41,14 +44,9 @@ local function getUserId(player: any): number?
 end
 
 local function makePosition(index: number, count: number): { x: number, y: number, z: number }
-    local angle = ((index - 1) * (2 * math.pi / count)) - (math.pi / 2)
-    local radius = 67
-
-    return {
-        x = math.floor(math.cos(angle) * radius + 0.5),
-        y = 5,
-        z = math.floor(math.sin(angle) * radius + 0.5),
-    }
+    local position = WorldConfig.getBaseSpawn(index, count)
+    assert(position ~= nil, "base spawn index must be within the configured ring")
+    return position
 end
 
 local function cloneBase(base: any): any
@@ -121,6 +119,207 @@ function BaseService._ensurePart(parent: any, name: string, className: string): 
     return instance
 end
 
+local function makeRoutePart(
+    parent: any,
+    name: string,
+    startPosition: any,
+    endPosition: any,
+    width: number,
+    zoneId: string
+)
+    local part = BaseService._ensurePart(parent, name, "Part")
+    local midpoint = (startPosition + endPosition) / 2
+    local directionTarget = Vector3.new(endPosition.X, midpoint.Y, endPosition.Z)
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanTouch = false
+    part.CanQuery = false
+    part.Size = Vector3.new(width, 0.12, (endPosition - startPosition).Magnitude)
+    part.CFrame = CFrame.lookAt(midpoint, directionTarget)
+    part.Material = Enum.Material.Slate
+    part.Color = Color3.fromRGB(94, 117, 117)
+    part:SetAttribute("MapZone", zoneId)
+    return part
+end
+
+local function mapPoint(radius: number, angle: number): Vector3
+    return Vector3.new(math.cos(angle) * radius, 0.11, math.sin(angle) * radius)
+end
+
+local function createZoneSign(
+    parent: any,
+    name: string,
+    labelText: string,
+    zoneId: string,
+    position: Vector3
+)
+    local post = BaseService._ensurePart(parent, name, "Part")
+    post.Anchored = true
+    post.CanCollide = false
+    post.CanTouch = false
+    post.CanQuery = false
+    post.Size = Vector3.new(0.55, 3, 0.55)
+    post.CFrame = CFrame.new(position)
+    post.Material = Enum.Material.Metal
+    post.Color = Color3.fromRGB(107, 130, 119)
+    post:SetAttribute("MapZone", zoneId)
+
+    local billboard = post:FindFirstChild("ZoneLabel")
+    if billboard == nil then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "ZoneLabel"
+        billboard.Size = UDim2.fromOffset(170, 42)
+        billboard.StudsOffset = Vector3.new(0, 2.2, 0)
+        billboard.MaxDistance = 100
+        billboard.AlwaysOnTop = true
+        billboard.Parent = post
+    end
+    local label = billboard:FindFirstChild("Text")
+    if label == nil then
+        label = Instance.new("TextLabel")
+        label.Name = "Text"
+        label.Size = UDim2.fromScale(1, 1)
+        label.BackgroundColor3 = Color3.fromRGB(28, 42, 48)
+        label.BackgroundTransparency = 0.14
+        label.BorderSizePixel = 0
+        label.Font = Enum.Font.GothamBold
+        label.TextColor3 = Color3.fromRGB(240, 250, 238)
+        label.TextScaled = true
+        label.Parent = billboard
+    end
+    label.Text = labelText
+    return post
+end
+
+local function createPartLabel(part: any, name: string, text: string, offset: Vector3)
+    local billboard = part:FindFirstChild(name)
+    if billboard == nil then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = name
+        billboard.Size = UDim2.fromOffset(190, 40)
+        billboard.MaxDistance = 72
+        billboard.AlwaysOnTop = false
+        billboard.Parent = part
+    end
+    billboard.StudsOffset = offset
+
+    local label = billboard:FindFirstChild("Text")
+    if label == nil then
+        label = Instance.new("TextLabel")
+        label.Name = "Text"
+        label.Size = UDim2.fromScale(1, 1)
+        label.BackgroundColor3 = Color3.fromRGB(28, 42, 48)
+        label.BackgroundTransparency = 0.12
+        label.BorderSizePixel = 0
+        label.Font = Enum.Font.GothamBold
+        label.TextColor3 = Color3.fromRGB(240, 250, 238)
+        label.TextScaled = true
+        label.Parent = billboard
+    end
+    label.Text = text
+    return billboard
+end
+
+local function createMapPresentation(folder: any)
+    local presentation = folder:FindFirstChild("MapPresentation")
+    if presentation == nil then
+        presentation = Instance.new("Folder")
+        presentation.Name = "MapPresentation"
+        presentation.Parent = folder
+    else
+        assert(presentation:IsA("Folder"), "MapPresentation must be a Folder")
+    end
+
+    local commons = BaseService._ensurePart(presentation, "CommonsPlatform", "Part")
+    commons.Anchored = true
+    commons.CanCollide = false
+    commons.CanTouch = false
+    commons.CanQuery = false
+    commons.Shape = Enum.PartType.Cylinder
+    commons.Size = Vector3.new(WorldConfig.COMMONS_RADIUS * 2, 0.18, WorldConfig.COMMONS_RADIUS * 2)
+    commons.CFrame = CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.pi / 2)
+    commons.Material = Enum.Material.SmoothPlastic
+    commons.Color = Color3.fromRGB(135, 163, 129)
+    commons:SetAttribute("MapZone", "Commons")
+
+    for index = 1, WorldConfig.CHASE_SEGMENT_COUNT do
+        local startAngle = ((index - 1) * (2 * math.pi / WorldConfig.CHASE_SEGMENT_COUNT))
+            - (math.pi / 2)
+        local endAngle = (index * (2 * math.pi / WorldConfig.CHASE_SEGMENT_COUNT)) - (math.pi / 2)
+        makeRoutePart(
+            presentation,
+            string.format("ChaseLoop%02d", index),
+            mapPoint(WorldConfig.CHASE_LOOP_RADIUS, startAngle),
+            mapPoint(WorldConfig.CHASE_LOOP_RADIUS, endAngle),
+            WorldConfig.CHASE_LOOP_WIDTH,
+            "ChaseLoop"
+        )
+    end
+
+    for index = 1, WorldConfig.COMMONS_SPOKE_COUNT do
+        local angle = (index - 1) * (2 * math.pi / WorldConfig.COMMONS_SPOKE_COUNT)
+        makeRoutePart(
+            presentation,
+            string.format("CommonsSpoke%02d", index),
+            mapPoint(WorldConfig.COMMONS_RADIUS, angle),
+            mapPoint(WorldConfig.CHASE_LOOP_RADIUS, angle),
+            WorldConfig.CHASE_LOOP_WIDTH,
+            "Commons"
+        )
+    end
+
+    for index = 1, WorldConfig.BASE_COUNT do
+        local angle = ((index - 1) * (2 * math.pi / WorldConfig.BASE_COUNT)) - (math.pi / 2)
+        makeRoutePart(
+            presentation,
+            string.format("BaseApproach%02d", index),
+            mapPoint(WorldConfig.CHASE_LOOP_RADIUS, angle),
+            mapPoint(WorldConfig.BASE_RING_RADIUS - 11, angle),
+            WorldConfig.CHASE_LOOP_WIDTH,
+            "BaseRing"
+        )
+    end
+
+    for index = 1, WorldConfig.CHASE_SEGMENT_COUNT do
+        local angle = ((index - 0.5) * (2 * math.pi / WorldConfig.CHASE_SEGMENT_COUNT))
+            - (math.pi / 2)
+        local beacon =
+            BaseService._ensurePart(presentation, string.format("ChaseBeacon%02d", index), "Part")
+        beacon.Anchored = true
+        beacon.CanCollide = false
+        beacon.CanTouch = false
+        beacon.CanQuery = false
+        beacon.Size = Vector3.new(0.65, 1.8, 0.65)
+        beacon.CFrame =
+            CFrame.new(mapPoint(WorldConfig.CHASE_LOOP_RADIUS, angle) + Vector3.new(0, 0.9, 0))
+        beacon.Material = Enum.Material.Neon
+        beacon.Color = Color3.fromRGB(130, 190, 165)
+        beacon:SetAttribute("MapZone", "ChaseLoop")
+    end
+
+    createZoneSign(
+        presentation,
+        "CommonsZoneSign",
+        "COMMONS",
+        "Commons",
+        Vector3.new(-17, 1.6, -18)
+    )
+    createZoneSign(
+        presentation,
+        "ChaseLoopZoneSign",
+        "CHASE LOOP",
+        "ChaseLoop",
+        Vector3.new(0, 1.6, -47)
+    )
+    createZoneSign(
+        presentation,
+        "BaseRingZoneSign",
+        "BASE RING",
+        "BaseRing",
+        Vector3.new(0, 1.6, 82)
+    )
+end
+
 function BaseService._ensureBlockoutWorld(self: any, world: any)
     local folder = world:FindFirstChild("OddlingsBlockout")
     if folder == nil then
@@ -133,10 +332,13 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
 
     local ground = BaseService._ensurePart(folder, "Ground", "Part")
     ground.Anchored = true
-    ground.Size = Vector3.new(180, 1, 180)
+    ground.Size = Vector3.new(WorldConfig.MAP_FOOTPRINT_STUDS, 1, WorldConfig.MAP_FOOTPRINT_STUDS)
     ground.CFrame = CFrame.new(0, -0.5, 0)
     ground.Material = Enum.Material.Grass
     ground.Color = Color3.fromRGB(103, 139, 94)
+    ground:SetAttribute("MapZone", "BaseRing")
+
+    createMapPresentation(folder)
 
     local kiosk = BaseService._ensurePart(folder, "CommonsKiosk", "Part")
     kiosk.Anchored = true
@@ -145,6 +347,8 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
     kiosk.Material = Enum.Material.WoodPlanks
     kiosk.Color = Color3.fromRGB(174, 133, 91)
     kiosk:SetAttribute("InteractionRangeStuds", 12)
+    kiosk:SetAttribute("MapZone", "Commons")
+    createPartLabel(kiosk, "InteractionLabel", "CAPSULES · CATALYSTS", Vector3.new(0, 3.2, 0))
 
     local mutationStation = BaseService._ensurePart(folder, "MutationStation", "Part")
     mutationStation.Anchored = true
@@ -153,6 +357,8 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
     mutationStation.Material = Enum.Material.Neon
     mutationStation.Color = Color3.fromRGB(112, 151, 173)
     mutationStation:SetAttribute("InteractionRangeStuds", EconomyConfig.KIOSK_RANGE_STUDS)
+    mutationStation:SetAttribute("MapZone", "Commons")
+    createPartLabel(mutationStation, "InteractionLabel", "MUTATION", Vector3.new(0, 2.4, 0))
 
     for _, base in self._bases do
         local plot = folder:FindFirstChild(base.id)
@@ -166,7 +372,7 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
 
         local pad = BaseService._ensurePart(plot, "Pad", "Part")
         pad.Anchored = true
-        pad.Size = Vector3.new(22, 1, 18)
+        pad.Size = Vector3.new(WorldConfig.BASE_PAD_SIZE_X, 1, WorldConfig.BASE_PAD_SIZE_Z)
         pad.CFrame = CFrame.new(base.spawn.x, 0.5, base.spawn.z)
         pad.Material = Enum.Material.SmoothPlastic
         pad.Color = Color3.fromRGB(125, 176, 132)
@@ -192,6 +398,8 @@ function BaseService._ensureBlockoutWorld(self: any, world: any)
             )
             display.Anchored = true
             display.CanCollide = false
+            display.CanTouch = false
+            display.CanQuery = false
             display.Shape = Enum.PartType.Ball
             display.Size = Vector3.new(2, 2, 2)
             display.CFrame = CFrame.new(base.spawn.x + offset.x, 3, base.spawn.z + offset.z)

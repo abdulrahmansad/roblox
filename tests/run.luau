@@ -15,9 +15,13 @@ local ActionService = require("../src/server/services/ActionService")
 local TheftService = require("../src/server/services/TheftService")
 local TagService = require("../src/server/services/TagService")
 local HudModel = require("../src/client/controllers/HudModel")
+local CodexModel = require("../src/client/controllers/CodexModel")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
 local RaidConfig = require("../src/shared/config/RaidConfig")
+local WorldConfig = require("../src/shared/config/WorldConfig")
+local AudioCueConfig = require("../src/shared/config/AudioCueConfig")
 local CreatureDefinitions = require("../src/shared/definitions/CreatureDefinitions")
+local CreatureVisualDefinitions = require("../src/shared/definitions/CreatureVisualDefinitions")
 local MutationDefinitions = require("../src/shared/definitions/MutationDefinitions")
 
 local passed = 0
@@ -1337,6 +1341,220 @@ test("M8 HUD summarizes income, first-session goals, rarity labels, and action f
     expect(string.find(HudModel.getErrorCopy("InsufficientCatalyst"), "Commons") ~= nil)
 end)
 
+test("M9 visual catalogs, map zones, Codex, and audio cues match locked V1 scope", function()
+    local distinctRigFamilies = {}
+    local speciesVisualCount = 0
+    for _, speciesId in CreatureDefinitions.SpeciesIdsByRarity.Common do
+        local visual = CreatureVisualDefinitions.Species[speciesId]
+        expect(visual ~= nil and visual.rigFamily ~= nil and visual.silhouette ~= nil)
+        distinctRigFamilies[visual.rigFamily] = true
+        speciesVisualCount += 1
+    end
+    for rarity, speciesIds in CreatureDefinitions.SpeciesIdsByRarity do
+        if rarity ~= "Common" then
+            for _, speciesId in speciesIds do
+                local visual = CreatureVisualDefinitions.Species[speciesId]
+                expect(visual ~= nil and visual.rigFamily ~= nil and visual.silhouette ~= nil)
+                distinctRigFamilies[visual.rigFamily] = true
+                speciesVisualCount += 1
+            end
+        end
+    end
+    local familyCount = 0
+    for _ in distinctRigFamilies do
+        familyCount += 1
+    end
+    expect(speciesVisualCount == 12 and familyCount == 4)
+    expect(#CreatureVisualDefinitions.RigFamilies == 4)
+
+    local mutationVisualCount = 0
+    for formId in MutationDefinitions.FormIdsByTheme do
+        for _, themeFormId in MutationDefinitions.FormIdsByTheme[formId] do
+            local recipe = CreatureVisualDefinitions.Mutations[themeFormId]
+            expect(
+                recipe ~= nil
+                    and type(recipe.body) == "table"
+                    and type(recipe.accent) == "table"
+                    and type(recipe.material) == "string"
+                    and type(recipe.silhouette) == "string"
+                    and type(recipe.effect) == "string"
+                    and CreatureVisualDefinitions.Effects[recipe.effect] ~= nil
+            )
+            mutationVisualCount += 1
+        end
+    end
+    expect(mutationVisualCount == 24)
+
+    local entries = CodexModel.getEntries({ speciesIds = {}, mutationFormIds = {} })
+    expect(#entries == 36)
+    expect(
+        CodexModel.getSummary({ speciesIds = {}, mutationFormIds = {} })
+            == "CODEX · 0/12 SPECIES · 0/24 FORMS"
+    )
+    local discoveredSpecies = {}
+    local discoveredForms = {}
+    for _, raritySpecies in CreatureDefinitions.SpeciesIdsByRarity do
+        for _, speciesId in raritySpecies do
+            discoveredSpecies[speciesId] = true
+        end
+    end
+    for _, themeForms in MutationDefinitions.FormIdsByTheme do
+        for _, formId in themeForms do
+            discoveredForms[formId] = true
+        end
+    end
+    expect(
+        CodexModel.getSummary({ speciesIds = discoveredSpecies, mutationFormIds = discoveredForms })
+            == "CODEX · 12/12 SPECIES · 24/24 FORMS"
+    )
+
+    expect(WorldConfig.MAP_FOOTPRINT_STUDS == 180 and WorldConfig.BASE_COUNT == 8)
+    expect(WorldConfig.CHASE_SEGMENT_COUNT == 8)
+    expect(#WorldConfig.ZONES == 3)
+    expect(WorldConfig.ZONES[1] == "BaseRing")
+    expect(WorldConfig.ZONES[2] == "Commons")
+    expect(WorldConfig.ZONES[3] == "ChaseLoop")
+
+    local cueCount = 0
+    for cueId, cue in AudioCueConfig.CUES do
+        expect(type(cueId) == "string" and type(cue.assetId) == "number" and cue.assetId > 0)
+        expect(cue.volume > 0 and cue.volume <= 1 and cue.playbackSpeed > 0)
+        cueCount += 1
+    end
+    expect(cueCount == 13)
+    expect(AudioCueConfig.INCOME_CUE_MIN_INTERVAL_SECONDS >= 30)
+
+    local visualIdCount = 0
+    for _ in CreatureVisualDefinitions.Species do
+        visualIdCount += 1
+    end
+    for _ in CreatureVisualDefinitions.Mutations do
+        visualIdCount += 1
+    end
+    expect(visualIdCount == 36, "visual catalog cannot contain missing or extra IDs")
+
+    local furthestBaseExtent = WorldConfig.BASE_RING_RADIUS
+        + math.max(WorldConfig.BASE_PAD_SIZE_X, WorldConfig.BASE_PAD_SIZE_Z) / 2
+    expect(furthestBaseExtent < WorldConfig.MAP_FOOTPRINT_STUDS / 2)
+    for index = 1, WorldConfig.BASE_COUNT do
+        local spawn = WorldConfig.getBaseSpawn(index, WorldConfig.BASE_COUNT)
+        expect(spawn ~= nil and spawn.y == 5)
+        local radius = math.sqrt(spawn.x * spawn.x + spawn.z * spawn.z)
+        expect(math.abs(radius - WorldConfig.BASE_RING_RADIUS) <= 1)
+    end
+    expect(WorldConfig.getBaseSpawn(0, WorldConfig.BASE_COUNT) == nil)
+    expect(WorldConfig.getBaseSpawn(WorldConfig.BASE_COUNT + 1, WorldConfig.BASE_COUNT) == nil)
+end)
+
+test("only an equipped Mythic mutation is announced server-wide", function()
+    local player = {
+        UserId = 81_001,
+        Name = "TestPlayer",
+        DisplayName = "OddlingFan",
+        sessionId = "mythic-session-1",
+        nearMutation = true,
+    }
+    local personalEvents = {}
+    local globalEvents = {}
+    local now = 100
+    local actionService = ActionService.new({
+        sessionService = {
+            getSession = function(_self, candidate)
+                if candidate == player then
+                    return { userId = player.UserId, sessionId = player.sessionId }
+                end
+                return nil
+            end,
+        },
+        raidService = {
+            getSnapshot = function()
+                return { phase = "PEACE" }
+            end,
+        },
+        playerDataService = {
+            getRevision = function()
+                return 12
+            end,
+        },
+        economyService = {
+            refreshPlayer = function()
+                return true
+            end,
+        },
+        capsuleService = {},
+        mutationService = {
+            resolveMutation = function(_self, _userId, transactionId)
+                if transactionId == "mythic-offer" then
+                    return {
+                        outcome = "Replaced",
+                        activeFormId = "Starforge",
+                        codexFormAdded = true,
+                    }
+                elseif transactionId == "common-offer" then
+                    return {
+                        outcome = "Replaced",
+                        activeFormId = "Cinder",
+                        codexFormAdded = false,
+                    }
+                end
+                return { outcome = "KeptCurrent", activeFormId = "Cinder" }
+            end,
+        },
+        theftService = {},
+        baseService = {
+            isOperational = function()
+                return true
+            end,
+        },
+        requestEvent = {},
+        resultEvent = {},
+        domainEvent = {
+            FireClient = function(_self, _player, event)
+                table.insert(personalEvents, event)
+            end,
+            FireAllClients = function(_self, event)
+                table.insert(globalEvents, event)
+            end,
+        },
+        clock = function()
+            return now
+        end,
+        unixClock = function()
+            return 1_000
+        end,
+        canInteract = function(candidate, station)
+            return candidate.nearMutation and station == "mutation"
+        end,
+    })
+
+    local function resolve(requestId, transactionId, choice)
+        return actionService:handle(player, {
+            sessionId = player.sessionId,
+            requestId = requestId,
+            action = "ResolveMutation",
+            payload = { transactionId = transactionId, choice = choice },
+        })
+    end
+
+    local mythic = resolve("mythic-resolve", "mythic-offer", "Replace")
+    expect(mythic.ok and mythic.data.outcome == "Replaced")
+    expect(#globalEvents == 1)
+    local announcement = globalEvents[1]
+    expect(announcement.event == Protocol.DomainEventNames.MythicEquipped)
+    expect(announcement.data.playerDisplayName == "OddlingFan")
+    expect(announcement.data.formId == "Starforge")
+    expect(announcement.data.baseId == nil and announcement.data.position == nil)
+    expect(announcement.revision == 12 and announcement.serverTimeUnix == 1_000)
+
+    local personalCount = #personalEvents
+    local replay = resolve("mythic-resolve", "mythic-offer", "Replace")
+    expect(replay.ok and #globalEvents == 1 and #personalEvents == personalCount)
+    expect(resolve("common-resolve", "common-offer", "Replace").ok)
+    now += 1
+    expect(resolve("kept-resolve", "kept-offer", "KeepCurrent").ok)
+    expect(#globalEvents == 1, "common and kept mutations are not announced")
+end)
+
 test("profile validation rejects corrupt fields and unknown schema versions", function()
     local profile = PlayerDataService.createDefaultProfile(function()
         return "starter-id"
@@ -2194,7 +2412,16 @@ test("late arrival grace participates only when expiry is strictly before Raid e
 end)
 
 test("theft channels server-side, carries one item, and commits a journaled bank", function()
-    local context = makeTheftContext()
+    local bankEvents = {}
+    local context = makeTheftContext({
+        emitToUser = function(userId, event, data)
+            table.insert(bankEvents, {
+                userId = userId,
+                event = event,
+                data = cloneTable(data),
+            })
+        end,
+    })
     local ownerBefore = context.dataService:getSnapshot(context.ownerUserId)
     local thiefBefore = context.dataService:getSnapshot(context.thiefUserId)
     local started, startError =
@@ -2246,6 +2473,21 @@ test("theft channels server-side, carries one item, and commits a journaled bank
     expect(context.players[context.thiefUserId].attributes.OddlingsCarriedCreatureId == nil)
     expect(context.humanoids[context.thiefUserId].WalkSpeed == 16)
     expect(context.humanoids[context.thiefUserId].JumpPower == 50)
+    local ownerRemoved = false
+    local thiefAdded = false
+    for _, message in bankEvents do
+        if message.event == Protocol.DomainEventNames.CreatureChanged then
+            ownerRemoved = ownerRemoved
+                or (message.userId == context.ownerUserId and message.data.change == "Removed")
+            thiefAdded = thiefAdded
+                or (
+                    message.userId == context.thiefUserId
+                    and message.data.change == "Added"
+                    and message.data.creature.id == context.targetId
+                )
+        end
+    end
+    expect(ownerRemoved and thiefAdded, "bank emits the committed ownership change to both players")
 end)
 
 test("a cancellation at the completed channel boundary cannot undo a valid theft", function()
@@ -2413,7 +2655,17 @@ test(
         expect(context.tagService:step(context.monotonicNow.value))
         expect(context.humanoids[context.thiefUserId].WalkSpeed == 16)
 
-        local carried = makeTheftContext()
+        local recoveryEvents = {}
+        local carried = makeTheftContext({
+            userIds = { 1_221, 1_222, 1_223 },
+            emitToUser = function(userId, event, data)
+                table.insert(recoveryEvents, {
+                    userId = userId,
+                    event = event,
+                    data = cloneTable(data),
+                })
+            end,
+        })
         local attemptId = beginAndCarryTheft(carried)
         carried.positions[carried.ownerUserId] = carried.positions[carried.thiefUserId]
         local dropped, dropError = carried.tagService:tag(carried.ownerUserId, carried.thiefUserId)
@@ -2430,6 +2682,18 @@ test(
             attempt.state == "RETURNED",
             "valid one-second recovery returns the original creature"
         )
+        local recoveredFor = {}
+        for _, message in recoveryEvents do
+            if
+                message.event == Protocol.DomainEventNames.TheftStateChanged
+                and message.data.state == "RETURNED"
+                and message.data.terminalReason == "Recovered"
+            then
+                recoveredFor[message.userId] = true
+            end
+        end
+        expect(recoveredFor[carried.ownerUserId] and recoveredFor[carried.thiefUserId])
+        expect(not recoveredFor[1_223], "recovery details stay limited to both participants")
         expect(
             CreatureService.findInProfile(
                 nil,
@@ -2826,6 +3090,8 @@ test("online income carries fractional Scrap and stops accruing when offline", f
     assert(dataService:load(701), "income test profile should load")
     local published = {}
     local scheduled = {}
+    local incomeEvents = {}
+    local failIncomeNotification = false
     local economyService = EconomyService.new({
         playerDataService = dataService,
         schedule = function(callback)
@@ -2834,6 +3100,16 @@ test("online income carries fractional Scrap and stops accruing when offline", f
         wait = function() end,
         publish = function(_player, scrap, rate)
             table.insert(published, { scrap = scrap, rate = rate })
+        end,
+        emitIncomeEvent = function(_player, userId, amount, balance)
+            table.insert(incomeEvents, {
+                userId = userId,
+                amount = amount,
+                scrap = balance,
+            })
+            if failIncomeNotification then
+                error("injected presentation delivery failure")
+            end
         end,
     })
     local player = { UserId = 701 }
@@ -2858,6 +3134,23 @@ test("online income carries fractional Scrap and stops accruing when offline", f
         published[#published].rate == 40,
         "visible leaderboard should show the exact income rate"
     )
+    local totalAnnouncedIncome = 0
+    for _, event in incomeEvents do
+        assert(event.userId == 701 and event.amount > 0, "income events are positive and private")
+        totalAnnouncedIncome += event.amount
+    end
+    assert(
+        #incomeEvents == 6 and totalAnnouncedIncome == 40,
+        "income event totals must match the credited online income"
+    )
+
+    failIncomeNotification = true
+    local payout, creditedAmount = economyService:accrue(701, 10)
+    assert(payout and creditedAmount > 0, "presentation failure must not roll back a payout")
+    assert(
+        dataService:getSnapshot(701).scrap == 90 + creditedAmount,
+        "committed income survives a failed presentation event"
+    )
 
     assert(economyService:stopPlayer(player), "leaving should stop the income loop")
     local offline, _, _, offlineReason = economyService:accrue(701, 600)
@@ -2865,7 +3158,10 @@ test("online income carries fractional Scrap and stops accruing when offline", f
         not offline and offlineReason == "PlayerOffline",
         "offline time must never accrue income"
     )
-    assert(dataService:getSnapshot(701).scrap == 90, "offline interval must not change Scrap")
+    assert(
+        dataService:getSnapshot(701).scrap == 90 + creditedAmount,
+        "offline interval must not change Scrap"
+    )
 end)
 
 test("Welcome Capsule is one-time, guaranteed Uncommon, and does not change pity", function()

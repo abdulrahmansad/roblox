@@ -29,6 +29,7 @@ assert(Constants.BASE_COUNT == Constants.MAX_PLAYERS, "base count must match ser
 local playerDataService: any = nil
 local theftService: any = nil
 local tagService: any = nil
+local domainEvent: any = nil
 local raidService = RaidService.new({
     clock = os.time,
     generateRaidId = function()
@@ -95,6 +96,19 @@ local creatureService = CreatureService.new({
 local economyService = EconomyService.new({
     playerDataService = playerDataService,
     creatureService = creatureService,
+    emitIncomeEvent = function(player, userId, amount, balance)
+        if domainEvent == nil or player.Parent ~= Players then
+            return
+        end
+        pcall(function()
+            domainEvent:FireClient(player, {
+                event = Protocol.DomainEventNames.IncomeCredited,
+                revision = playerDataService:getRevision(userId) or 0,
+                serverTimeUnix = os.time(),
+                data = { amount = amount, scrap = balance },
+            })
+        end)
+    end,
 })
 local capsuleService = CapsuleService.new({
     playerDataService = playerDataService,
@@ -124,7 +138,7 @@ end
 
 local actionRequest = ensureRemoteEvent(Protocol.RemoteNames.ActionRequest)
 local actionResult = ensureRemoteEvent(Protocol.RemoteNames.ActionResult)
-local domainEvent = ensureRemoteEvent(Protocol.RemoteNames.DomainEvent)
+domainEvent = ensureRemoteEvent(Protocol.RemoteNames.DomainEvent)
 local blockout = Workspace:WaitForChild("OddlingsBlockout")
 local kioskPart = blockout:WaitForChild("CommonsKiosk")
 local mutationStationPart = blockout:WaitForChild("MutationStation")

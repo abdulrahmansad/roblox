@@ -6,6 +6,9 @@ local Protocol = if game ~= nil
 local EconomyConfig = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.config.EconomyConfig)
     else require("../../shared/config/EconomyConfig")
+local MutationDefinitions = if game ~= nil
+    then require(game:GetService("ReplicatedStorage").Shared.definitions.MutationDefinitions)
+    else require("../../shared/definitions/MutationDefinitions")
 
 local ActionService = {}
 ActionService.__index = ActionService
@@ -583,6 +586,38 @@ function ActionService.handle(self: any, player: any, request: any): any?
                 end
             end
         end)
+    end
+
+    if
+        ok
+        and request.action == "ResolveMutation"
+        and data.outcome == "Replaced"
+        and type(data.activeFormId) == "string"
+    then
+        local form = MutationDefinitions[data.activeFormId]
+        if form ~= nil and form.tier == "Mythic" then
+            pcall(function()
+                if type(self._domainEvent.FireAllClients) ~= "function" then
+                    return
+                end
+                local displayName = player.DisplayName
+                if type(displayName) ~= "string" or #displayName == 0 then
+                    displayName = player.Name
+                end
+                if type(displayName) ~= "string" or #displayName == 0 then
+                    displayName = "A player"
+                end
+                self._domainEvent:FireAllClients({
+                    event = Protocol.DomainEventNames.MythicEquipped,
+                    revision = revision or 0,
+                    serverTimeUnix = self._unixClock(),
+                    data = {
+                        playerDisplayName = string.sub(displayName, 1, 32),
+                        formId = data.activeFormId,
+                    },
+                })
+            end)
+        end
     end
 
     return response

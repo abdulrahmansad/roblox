@@ -14,6 +14,9 @@ local CapsuleConfig = require(ReplicatedStorage.Shared.config.CapsuleConfig)
 local MutationConfig = require(ReplicatedStorage.Shared.config.MutationConfig)
 local RaidConfig = require(ReplicatedStorage.Shared.config.RaidConfig)
 local MutationDefinitions = require(ReplicatedStorage.Shared.definitions.MutationDefinitions)
+local CodexModel = require(script.Parent.CodexModel)
+local AudioEffectsController = require(script.Parent.AudioEffectsController)
+local CreaturePresentationController = require(script.Parent.CreaturePresentationController)
 local HudModel = require(script.Parent.HudModel)
 local RaidPresentationController = require(script.Parent.RaidPresentationController)
 
@@ -66,6 +69,7 @@ local holdProgressFilledCount = -1
 local menuPanel: Frame? = nil
 local menuTitle: TextLabel? = nil
 local menuBody: Frame? = nil
+local effectsButton: TextButton? = nil
 local toastPanel: Frame? = nil
 local toastLabel: TextLabel? = nil
 
@@ -642,10 +646,38 @@ local function buildUi(parentGui: ScreenGui)
         "PanelTitle",
         "",
         UDim2.fromOffset(12, 5),
-        UDim2.new(1, -76, 0, 48),
+        UDim2.new(1, -144, 0, 48),
         16,
         Enum.TextXAlignment.Left
     )
+    effectsButton = makeButton(
+        menuPanel,
+        "ReducedEffects",
+        if AudioEffectsController.isReducedEffectsEnabled() then "FX\nLOW" else "FX\nFULL",
+        UDim2.new(1, -122, 0, 4),
+        UDim2.fromOffset(56, HudModel.MIN_TOUCH_TARGET_PX),
+        Color3.fromRGB(74, 103, 111),
+        function()
+            local enabled = not AudioEffectsController.isReducedEffectsEnabled()
+            AudioEffectsController.setReducedEffects(enabled)
+            CreaturePresentationController.setReducedEffects(enabled)
+            if effectsButton ~= nil then
+                effectsButton.Text = if enabled then "FX\nLOW" else "FX\nFULL"
+                effectsButton.BackgroundColor3 = if enabled
+                    then Color3.fromRGB(74, 103, 111)
+                    else Color3.fromRGB(83, 91, 106)
+            end
+            if announce ~= nil then
+                announce(
+                    if enabled
+                        then "Reduced visual effects enabled."
+                        else "Full visual effects enabled.",
+                    3
+                )
+            end
+        end
+    )
+    effectsButton.TextSize = 11
     local closeButton = makeButton(
         menuPanel,
         "ClosePanel",
@@ -741,16 +773,16 @@ renderMenu = function()
 
     if menuKind == "Commons" then
         menuTitle.Text = "COMMONS"
-        local tabs = { "Grow", "Sell", "Catalyst" }
+        local tabs = { "Grow", "Sell", "Catalyst", "Codex" }
         for index, tab in tabs do
             local button = bodyButton(
                 "Tab" .. tab,
                 string.upper(tab),
-                (index - 1) / 3,
+                (index - 1) / #tabs,
                 3,
                 0,
-                1 / 3,
-                -7,
+                1 / #tabs,
+                -6,
                 if menuTab == tab then Color3.fromRGB(63, 115, 143) else Color3.fromRGB(58, 68, 84),
                 true,
                 function()
@@ -984,6 +1016,53 @@ renderMenu = function()
                     end
                 end
             )
+        elseif menuTab == "Codex" then
+            menuTitle.Text = "CODEX"
+            local codex = if snapshot ~= nil then snapshot.codex else nil
+            bodyLabel("CodexSummary", CodexModel.getSummary(codex), 60, 28, 12)
+            local entries = CodexModel.getEntries(codex)
+            local scroll = Instance.new("ScrollingFrame")
+            scroll.Name = "CodexEntries"
+            scroll.Position = UDim2.fromOffset(2, 92)
+            scroll.Size = UDim2.new(1, -4, 1, -94)
+            scroll.BackgroundTransparency = 1
+            scroll.BorderSizePixel = 0
+            scroll.ScrollBarThickness = 6
+            scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+            scroll.CanvasSize = UDim2.fromOffset(0, #entries * 44)
+            scroll.ZIndex = 32
+            scroll.Parent = menuBody
+            for index, entry in entries do
+                local rarity = HudModel.getRarityPresentation(entry.rarity)
+                local row = Instance.new("TextLabel")
+                row.Name = "CodexEntry_" .. entry.kind .. "_" .. entry.id
+                row.Position = UDim2.fromOffset(0, (index - 1) * 44)
+                row.Size = UDim2.new(1, -8, 0, 40)
+                row.BackgroundColor3 = if entry.discovered
+                    then Color3.fromRGB(42, 55, 62)
+                    else Color3.fromRGB(31, 40, 47)
+                row.BackgroundTransparency = 0.05
+                row.BorderSizePixel = 0
+                row.Font = Enum.Font.GothamMedium
+                row.Text = string.format(
+                    "%s %s · %s · %s",
+                    rarity.icon,
+                    rarity.label,
+                    if entry.kind == "Species"
+                        then "SPECIES"
+                        else string.upper(entry.themeId) .. " FORM",
+                    entry.label
+                )
+                row.TextColor3 = if entry.discovered
+                    then RARITY_COLORS[entry.rarity] or RARITY_COLORS.Neutral
+                    else Color3.fromRGB(147, 157, 166)
+                row.TextSize = 12
+                row.TextXAlignment = Enum.TextXAlignment.Left
+                row.TextTruncate = Enum.TextTruncate.AtEnd
+                row.ZIndex = 33
+                row.Parent = scroll
+                makeCorner(row, 8)
+            end
         else
             bodyLabel(
                 "CatalystHint",
@@ -1269,6 +1348,7 @@ renderMenu = function()
                     and canAfford(MutationConfig.NORMAL_PRICE),
                 function()
                     if selected ~= nil then
+                        AudioEffectsController.playCue("MutationStart")
                         sendAction(
                             "StartMutation",
                             { creatureId = selected.id, themeId = selectedTheme },
@@ -1372,6 +1452,20 @@ local function addSnapshotCreature(creature: any)
     if getCreature(creature.id) == nil then
         table.insert(snapshot.creatures, creature)
     end
+    if
+        type(creature.speciesId) == "string"
+        and type(snapshot.codex) == "table"
+        and type(snapshot.codex.speciesIds) == "table"
+    then
+        snapshot.codex.speciesIds[creature.speciesId] = true
+    end
+    if
+        type(creature.mutationFormId) == "string"
+        and type(snapshot.codex) == "table"
+        and type(snapshot.codex.mutationFormIds) == "table"
+    then
+        snapshot.codex.mutationFormIds[creature.mutationFormId] = true
+    end
 end
 
 local function applyActionResult(action: string, data: any)
@@ -1381,6 +1475,10 @@ local function applyActionResult(action: string, data: any)
     if action == "PurchaseCapsule" then
         addSnapshotCreature(data.creature)
         setScrapInSnapshot(data.scrapBalance)
+        AudioEffectsController.playCue("CapsuleReveal")
+        if data.rarity == "Rare" then
+            AudioEffectsController.playCue("RarePlus")
+        end
         if data.kind == "Welcome" and snapshot ~= nil then
             snapshot.welcomeAvailable = false
         end
@@ -1406,6 +1504,7 @@ local function applyActionResult(action: string, data: any)
         end
         setScrapInSnapshot(data.scrapBalance)
     elseif action == "CompleteTutorialMutation" then
+        AudioEffectsController.playCue("MutationReveal")
         if snapshot ~= nil then
             snapshot.tutorialCompleted = true
             for _, creature in snapshot.creatures do
@@ -1415,6 +1514,10 @@ local function applyActionResult(action: string, data: any)
             end
         end
     elseif action == "StartMutation" then
+        AudioEffectsController.playCue("MutationReveal")
+        if data.tier == "Rare" or data.tier == "Mythic" then
+            AudioEffectsController.playCue("RarePlus")
+        end
         pendingMutation = data
         if snapshot ~= nil then
             snapshot.pendingMutation = data
@@ -1588,14 +1691,38 @@ local function applyDomainEvent(event: any)
         return
     end
     local data = if type(event.data) == "table" then event.data else {}
-    if event.event == Protocol.DomainEventNames.RaidPhaseChanged then
+    if event.event == Protocol.DomainEventNames.MythicEquipped then
+        local displayName = if type(data.playerDisplayName) == "string"
+            then data.playerDisplayName
+            else "A player"
+        local form = if type(data.formId) == "string" then MutationDefinitions[data.formId] else nil
+        announce(
+            "MYTHIC · "
+                .. displayName
+                .. " equipped "
+                .. (if form ~= nil then form.displayName else "a Mythic form")
+                .. ".",
+            7
+        )
+        AudioEffectsController.playCue("RarePlus")
+    elseif event.event == Protocol.DomainEventNames.IncomeCredited then
+        if type(data.scrap) == "number" and type(data.amount) == "number" and data.amount > 0 then
+            setScrapInSnapshot(data.scrap)
+            AudioEffectsController.playCue("IncomeTick")
+            updateStatusLabels()
+            refreshOpenMenu()
+        end
+    elseif event.event == Protocol.DomainEventNames.RaidPhaseChanged then
         local phase = data.phase
         if phase == "WARNING" then
             announce("RAID WARNING · 30 seconds to prepare.", 5)
+            AudioEffectsController.playCue("RaidWarning")
         elseif phase == "RAID" then
             announce("RAID START · Tag a nearby carrier or bring a theft home.", 5)
+            AudioEffectsController.playCue("RaidStart")
         elseif phase == "RESOLUTION" then
             announce("RAID END · unfinished carries return.", 4)
+            AudioEffectsController.playCue("RaidEnd")
             if closeMenu ~= nil then
                 closeMenu()
             end
@@ -1617,6 +1744,28 @@ local function applyDomainEvent(event: any)
     elseif event.event == "CreatureAdded" then
         addSnapshotCreature(data.creature)
         updateStatusLabels()
+        refreshOpenMenu()
+    elseif event.event == Protocol.DomainEventNames.CreatureChanged then
+        if data.change == "Added" and type(data.creature) == "table" then
+            addSnapshotCreature(data.creature)
+        elseif data.change == "Removed" and type(data.creatureId) == "string" then
+            if snapshot ~= nil and type(snapshot.creatures) == "table" then
+                for index, creature in snapshot.creatures do
+                    if creature.id == data.creatureId then
+                        table.remove(snapshot.creatures, index)
+                        break
+                    end
+                end
+            end
+            if selectedCreatureId == data.creatureId then
+                selectedCreatureId = nil
+            end
+        end
+        updateStatusLabels()
+        if renderHud ~= nil then
+            renderHud()
+        end
+        refreshOpenMenu()
     elseif event.event == "CreatureRemoved" and type(data.creatureId) == "string" then
         if snapshot ~= nil then
             for index, creature in snapshot.creatures do
@@ -1646,7 +1795,21 @@ local function applyDomainEvent(event: any)
         if renderHud ~= nil then
             renderHud()
         end
+    elseif event.event == "CodexChanged" then
+        if snapshot ~= nil and type(snapshot.codex) == "table" then
+            if type(data.speciesId) == "string" and type(snapshot.codex.speciesIds) == "table" then
+                snapshot.codex.speciesIds[data.speciesId] = true
+            end
+            if
+                type(data.mutationFormId) == "string"
+                and type(snapshot.codex.mutationFormIds) == "table"
+            then
+                snapshot.codex.mutationFormIds[data.mutationFormId] = true
+            end
+        end
+        refreshOpenMenu()
     elseif event.event == "TagResolved" then
+        AudioEffectsController.playCue("TagDrop")
         announce(
             if data.result == "Dropped"
                 then "TAG · creature dropped. Recover it now."
@@ -1660,11 +1823,16 @@ local function applyDomainEvent(event: any)
             localAttemptState = data.state
         end
         if data.state == "CHANNELING" then
+            if data.thiefUserId == localUserId or data.ownerUserId == localUserId then
+                AudioEffectsController.playCue("TheftInTransit")
+            end
             if data.thiefUserId == localUserId then
                 channelStartedAt[data.attemptId] = channelStartedAt[data.attemptId] or os.clock()
                 if contextHold ~= nil and contextHold.mode == "STEAL" then
                     contextHold.attemptId = data.attemptId
                 end
+            elseif data.ownerUserId == localUserId then
+                announce("Someone is stealing from your base · Tag them to interrupt.", 4)
             end
         elseif data.state == "BANKING" then
             bankStartedAt[data.attemptId] = bankStartedAt[data.attemptId] or os.clock()
@@ -1700,10 +1868,19 @@ local function applyDomainEvent(event: any)
             end
             if data.state == "BANKED" then
                 if data.ownerUserId == localUserId then
+                    AudioEffectsController.playCue("SuccessfulBank")
                     announce("A player banked an oddling from your base.", 4)
+                elseif data.thiefUserId == localUserId then
+                    AudioEffectsController.playCue("Escape")
+                    announce("Oddling banked · it is now in your collection.", 4)
                 end
             elseif data.ownerUserId == localUserId then
-                announce("Oddling returned safely.", 4)
+                if data.terminalReason == "Recovered" then
+                    AudioEffectsController.playCue("Recovery")
+                    announce("Oddling recovered safely.", 4)
+                else
+                    announce("Oddling returned safely.", 4)
+                end
             end
         elseif data.state == "CARRIED" then
             channelStartedAt[data.attemptId] = nil

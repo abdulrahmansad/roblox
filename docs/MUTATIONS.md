@@ -84,6 +84,6 @@ A Rare or Mythic resets the Rare-or-better counter; any result below Rare increm
 
 ## Visual and audio treatment
 
-Every form uses a shared recipe across all 12 creatures: palette/material, one shared accessory or silhouette detail, and a lightweight effect. Common is clearly recolored; Uncommon adds an animated detail; Rare adds a restrained aura; Mythic adds a distinctive layered palette and aura. Effects do not change hitboxes, movement, or raid visibility.
+Every form uses a shared recipe across all 12 creatures: palette/material, one shared accessory or silhouette detail, and a lightweight effect. Common is clearly recolored with its form detail; Uncommon adds a gently bobbing detail; Rare adds a restrained occluded highlight; Mythic adds its layered palette, form detail, and stronger restrained highlight. The FX control lowers sound volume and disables motion/highlights. Effects do not change hitboxes, movement, or raid visibility. Studio review is still needed to confirm materials and effects read well on device screens.
 
 The player sees a theme-colored catalyst, normal odds, current Rare-or-better pity state, any active next-roll guarantee and its exact odds, Scrap cost, and the exact creature affected before confirming. The reveal combines a short machine cue, a tier label, and a brief silhouette-to-form transition. A Mythic announcement goes to the server only after the player equips the Mythic, and it does not expose the player's base location.

@@ -61,3 +61,9 @@ A player may sell any non-starter creature at the commons kiosk for 60 Scrap. Th
 The Codex has 12 species entries and 24 mutation-form entries. Discovering a form on any species fills that form entry; it does not require collecting all 288 species/form pairings. Creature instances are displayed in place rather than carried in a large inventory.
 
 The art target is 12 readable species silhouettes assembled from four shared body-rig families, plus 24 shared mutation recipes. Rarity does not alter collision size or movement.
+
+## V1 presentation
+
+`CreatureVisualDefinitions` contains one reusable silhouette/palette for each species and one palette/material/detail/effect recipe for each mutation form. The client builds these as anchored local display models over the server's stand markers; client models have no collision, touch, or query behavior. The server markers continue to carry the authoritative creature ID, species, and active form. Inspection labels show species and base rarity, mutation and mutation rarity, and current Scrap/min. The map blockout keeps eight pads within the 180 by 180 stud ground, with a Commons circle, an octagonal chase route, four Commons spokes, and eight base approaches. The client Codex lists each of the 12 species and 24 forms once, hiding undiscovered names behind generic labels.
+
+Studio inspection is still required to judge silhouettes, material readability, billboard overlap, low-end performance, and audio asset loading in the running experience.

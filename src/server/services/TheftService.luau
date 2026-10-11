@@ -139,6 +139,8 @@ function TheftService._emitState(self: any, attempt: any)
     }
     if attempt.state == "DROPPED" then
         data.dropPosition = copyPosition(attempt.dropPosition)
+    elseif attempt.state == "RETURNED" then
+        data.terminalReason = attempt.terminalReason
     end
     self:_emit(attempt.thiefUserId, Protocol.DomainEventNames.TheftStateChanged, data)
     self:_emit(attempt.ownerUserId, Protocol.DomainEventNames.TheftStateChanged, data)

@@ -121,6 +121,7 @@ Each accepted milestone closes with one focused commit containing only its imple
 - **Acceptance:** No missing IDs or display recipes; map routes and three zones meet the approved footprint; mutation effects preserve readability and performance budget.
 - **Docs:** `CREATURES.md`, `MUTATIONS.md`, `GAME_DESIGN.md`, `TESTING.md`.
 - **Commit boundary:** One content/art integration commit after all catalogs validate.
+- **Current evidence:** Portable verification passes formatting, Selene (0 warnings/errors), 86 Lune tests, and the Rojo build. Coverage verifies 12 species / 4 rigs, 24 mutation recipes, all 36 Codex entries, map footprint/base-ring geometry, online-income notification safety, participant-only recovery reasons, and a global Mythic notice only after a successful equipped Replace. The local blockout now has Commons/Chase Loop/Base Ring labels, route segments, stand-based local creature models, an on-demand Codex, and presentation cues with reduced-effects controls. Roblox Studio is unavailable, so model/material inspection, sound asset load, mobile readability, instance/performance review, and multiplayer presentation remain pending.
 
 ## M10 — Balance and abuse playtest
 

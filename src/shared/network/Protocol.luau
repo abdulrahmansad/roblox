@@ -54,6 +54,7 @@ export type TheftStateChangedData = {
     creatureId: string,
     serverTimeUnix: number,
     dropPosition: { x: number, y: number, z: number }?,
+    terminalReason: string?,
 }
 
 local Protocol = {}
@@ -74,6 +75,8 @@ Protocol.DomainEventNames = table.freeze({
     TheftStateChanged = "TheftStateChanged",
     TheftBanked = "TheftBanked",
     TagResolved = "TagResolved",
+    IncomeCredited = "IncomeCredited",
+    MythicEquipped = "MythicEquipped",
 })
 
 Protocol.PlayerAttributeNames = table.freeze({

@@ -1,6 +1,6 @@
 # First session, retention, and mobile UX
 
-M8 now presents the compact Scrap/income/slots HUD, shared phase countdown, one next-goal card, first-session theme choice, contextual station/raid actions, and small touch-first menus. Touch holds show a radial progress ring; rarity uses a name, icon, and color. These client controls only request actions—the server remains authoritative. The schedule below is the locked target experience. Roblox Studio phone and multiplayer checks are still pending; M9 will add the locked sound cues while keeping their important moments visible as captions.
+M8 presents the compact Scrap/income/slots HUD, shared phase countdown, one next-goal card, first-session theme choice, contextual station/raid actions, and small touch-first menus. M9 adds the fixed Codex, local creature models, world-zone labels, and short one-shot cues. Touch holds show a radial progress ring; rarity uses a name, icon, and color. These client controls only request actions—the server remains authoritative. The schedule below is the locked target experience. Roblox Studio phone, audio-load, and multiplayer checks are still pending; important moments keep their visual announcements when sound is unavailable.
 
 ## First 10 minutes
 
@@ -42,11 +42,11 @@ The 3:00 balance estimate assumes the Welcome Capsule's expected Uncommon income
 - No persistent inventory grid, scrolling shop, or manual collect button.
 - Primary controls are at least 52 pixels across. Hold duration is shown as a radial fill. Theft cancels when released early; bank/recovery progress resets after movement beyond the server's 0.5-stud stationary tolerance.
 - Tag is one large context button on mobile, and one keyboard action on desktop. It does not require aiming.
-- Rarity is conveyed with text, icon, and color. Captions/visual alerts cover important sound cues. M8 introduces no sustained particles or camera effects; M9's content effects must retain a reduced-effects path.
+- Rarity is conveyed with text, icon, and color. Captions/visual alerts cover important sound cues. Creature models are local, anchored, and non-colliding. Uncommon accents bob gently; Rare and Mythic forms use restrained occluded highlights. The FX control lowers cue volume and disables motion/highlights.
 
 ## Sound and feedback schedule
 
-Use brief cues for capsule acquired, machine start, mutation reveal, Rare-or-better, Warning, Raid start, creature in transit, banked theft, successful Tag/drop, owner recovery, thief escape, and Raid end. A grouped income cue happens at most once every 30 seconds per player. No repeated per-creature coin sounds or full soundtrack production are needed.
+Use brief cues for capsule acquired, machine start, mutation reveal, Rare-or-better, Warning, Raid start, creature in transit, banked theft, successful Tag/drop, owner recovery, thief escape, and Raid end. A grouped income cue happens at most once every 30 seconds per player and follows only committed online income. No repeated per-creature coin sounds or full soundtrack production are needed. If an asset cannot load, the matching visual announcement remains.
 
 ## Player review
 
