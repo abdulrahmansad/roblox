@@ -18,6 +18,7 @@ Assert-Equal $summary.sourceRecords.parsedKnownEvents 21 'Recognized event count
 Assert-Equal $summary.dataQuality.malformedRecords 2 'Malformed event count'
 Assert-Equal $summary.dataQuality.unknownEventRecords 1 'Unknown event count'
 Assert-Equal $summary.dataQuality.ignoredNonAnalyticsLines 1 'Ignored output line count'
+Assert-Equal $summary.eventCounts.arrival_grace_started 1 'Empty Luau properties event count'
 Assert-Equal $summary.firstSession.newPlayerSessions 2 'New player session count'
 Assert-Equal $summary.firstSession.firstCapsuleSeconds.count 2 'First capsule sample count'
 Assert-Equal $summary.firstSession.firstCapsuleSeconds.median 105 'First capsule median seconds'

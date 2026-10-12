@@ -39,6 +39,16 @@ foreach ($line in Get-Content -LiteralPath $Path) {
         continue
     }
 
+    # Roblox HttpService:JSONEncode serializes an empty Luau table as an empty
+    # JSON array. Treat that representation as the empty properties object.
+    if (
+        $record -is [System.Management.Automation.PSCustomObject] -and
+        $record.properties -is [System.Array] -and
+        $record.properties.Count -eq 0
+    ) {
+        $record.properties = [pscustomobject]@{}
+    }
+
     if (
         $null -eq $record -or
         $record -isnot [System.Management.Automation.PSCustomObject] -or
