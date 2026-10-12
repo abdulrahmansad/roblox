@@ -13,6 +13,7 @@ local MutationDefinitions = if game ~= nil
 local JOURNAL_KEY = "OddlingsTransfersV1"
 local MAX_RECORDS = 64
 local DEFAULT_MAX_ATTEMPTS = 3
+local MAX_SAFE_USER_ID = 9_007_199_254_740_991
 local THEMES = { Ember = true, Prism = true, Moss = true }
 
 local function defaultWait(seconds: number)
@@ -31,7 +32,13 @@ local function cloneValue(value: any): any
 end
 
 local function isUserId(value: any): boolean
-    return type(value) == "number" and value > 0 and value % 1 == 0
+    return type(value) == "number"
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+        and value % 1 == 0
+        and value >= 1
+        and value <= MAX_SAFE_USER_ID
 end
 
 local function hasExactKeys(value: any, allowed: { [string]: boolean }): boolean

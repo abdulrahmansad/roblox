@@ -16,6 +16,8 @@ local MutationConfig = if game ~= nil
 local PlayerDataService = {}
 PlayerDataService.__index = PlayerDataService
 
+local MAX_SAFE_USER_ID = 9_007_199_254_740_991
+
 local PROFILE_FIELDS = {
     schemaVersion = true,
     scrap = true,
@@ -53,6 +55,10 @@ local function isIntegerBetween(value: any, minimum: number, maximum: number): b
         and value % 1 == 0
         and value >= minimum
         and value <= maximum
+end
+
+local function isValidUserId(value: any): boolean
+    return isIntegerBetween(value, 1, MAX_SAFE_USER_ID)
 end
 
 local function validateExactKeys(value: any, allowed: { [string]: boolean }): boolean
@@ -322,8 +328,8 @@ local function reconcileTransferRecord(
     if
         type(record) ~= "table"
         or (record.state ~= "PREPARED" and record.state ~= "COMMITTED")
-        or not isIntegerBetween(record.fromUserId, 1, 2_147_483_647)
-        or not isIntegerBetween(record.toUserId, 1, 2_147_483_647)
+        or not isValidUserId(record.fromUserId)
+        or not isValidUserId(record.toUserId)
         or record.fromUserId == record.toUserId
         or type(record.transferId) ~= "string"
         or type(record.raidId) ~= "string"
@@ -537,8 +543,8 @@ function PlayerDataService.lockTransfer(
         type(transferId) ~= "string"
         or #transferId < 1
         or #transferId > 128
-        or not isIntegerBetween(fromUserId, 1, 2_147_483_647)
-        or not isIntegerBetween(toUserId, 1, 2_147_483_647)
+        or not isValidUserId(fromUserId)
+        or not isValidUserId(toUserId)
         or fromUserId == toUserId
         or type(creatureId) ~= "string"
         or #creatureId < 1
@@ -599,8 +605,8 @@ function PlayerDataService.finishTransfer(self: any, record: any): (boolean, str
         type(record) ~= "table"
         or type(record.transferId) ~= "string"
         or record.state ~= "COMMITTED"
-        or not isIntegerBetween(record.fromUserId, 1, 2_147_483_647)
-        or not isIntegerBetween(record.toUserId, 1, 2_147_483_647)
+        or not isValidUserId(record.fromUserId)
+        or not isValidUserId(record.toUserId)
     then
         return false, "InvalidTransfer"
     end

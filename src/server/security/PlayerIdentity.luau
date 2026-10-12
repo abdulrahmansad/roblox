@@ -5,6 +5,7 @@ local PlayerIdentity = {}
 
 local MAX_STUDIO_PROFILE_USER_ID = 2_147_483_647
 local MAX_STUDIO_TEST_CLIENTS = 8
+local MAX_SAFE_USER_ID = 9_007_199_254_740_991
 
 local function isPlayerCandidate(player: any): boolean
     if type(player) == "table" then
@@ -22,12 +23,18 @@ function PlayerIdentity.resolve(player: any, allowStudioTestUsers: boolean?): nu
     end
 
     local userId = player.UserId
-    if type(userId) ~= "number" or userId % 1 ~= 0 then
+    if
+        type(userId) ~= "number"
+        or userId ~= userId
+        or userId == math.huge
+        or userId == -math.huge
+        or userId % 1 ~= 0
+    then
         return nil
     end
 
     if userId > 0 then
-        return userId
+        return if userId <= MAX_SAFE_USER_ID then userId else nil
     end
 
     if allowStudioTestUsers ~= true or userId < -MAX_STUDIO_TEST_CLIENTS or userId == 0 then

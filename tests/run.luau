@@ -1163,6 +1163,7 @@ test("unpublished Studio identities support isolated local multiplayer sessions"
     expect(PlayerIdentity.resolve(newPlayer(-1), false) == nil)
     expect(PlayerIdentity.resolve(newPlayer(501), false) == 501)
     expect(PlayerIdentity.resolve(newPlayer(3_000_000_000), false) == 3_000_000_000)
+    expect(PlayerIdentity.resolve(newPlayer(9_007_199_254_740_992), false) == nil)
     expect(PlayerIdentity.resolve(newPlayer(0), true) == nil)
 
     local baseService = BaseService.new({ baseCount = 1, resolveUserId = resolveUserId })
@@ -2341,6 +2342,10 @@ test("transfer journal retries storage errors and stays bounded and schema-stric
         createdAtUnix = 1_000,
     }
     expect(journal:prepare(record), "prepared writes retry within the configured limit")
+    local unsafeUserIdRecord = cloneTable(record)
+    unsafeUserIdRecord.transferId = "unsafe-user-id"
+    unsafeUserIdRecord.toUserId = 9_007_199_254_740_992
+    expect(not journal:prepare(unsafeUserIdRecord), "unsafe floating-point user IDs are rejected")
     expect(retryStore.calls == 3 and waits == 2)
     retryStore.failAfterWriteOnCall = 4
     expect(journal:commit(record.transferId), "an ambiguous committed write is idempotent")
@@ -2739,6 +2744,30 @@ test("theft channels server-side, carries one item, and commits a journaled bank
             or (event.userId == context.thiefUserId and event.event == "theft_banked")
     end
     expect(lostTracked and bankTracked, "only the committed bank records loss and theft analytics")
+end)
+
+test("high Roblox user IDs can complete a journaled theft transfer", function()
+    local context = makeTheftContext({ userIds = { 3_000_000_000, 3_000_000_001 } })
+    local attemptId = beginAndCarryTheft(context)
+    context.positions[context.thiefUserId] =
+        context.baseService:getHomePadPosition(context.thiefUserId)
+    expect(context.theftService:beginBank(context.thiefUserId, attemptId))
+    context.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+
+    local result, resultError =
+        context.theftService:completeBank(context.thiefUserId, attemptId, "Ember")
+    expect(result ~= nil and resultError == nil, "high-ID bank should commit successfully")
+    local ownerProfile = context.dataService:getSnapshot(context.ownerUserId)
+    local thiefProfile = context.dataService:getSnapshot(context.thiefUserId)
+    expect(
+        CreatureService.findInProfile(nil, ownerProfile, context.targetId) == nil,
+        "committed transfer removes the creature from the high-ID owner"
+    )
+    expect(
+        CreatureService.findInProfile(nil, thiefProfile, context.targetId) ~= nil,
+        "committed transfer adds the creature to the high-ID thief"
+    )
+    expect(thiefProfile.catalysts.emberSeed == 1)
 end)
 
 test("a cancellation at the completed channel boundary cannot undo a valid theft", function()
