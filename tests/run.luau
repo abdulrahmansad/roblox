@@ -5265,6 +5265,22 @@ test(
             #events == eventCountBeforeRejectedPayload,
             "rejected event payloads must not reach the writer"
         )
+        local callSucceeded, nanEnumAccepted = pcall(function()
+            return telemetry:record(
+                9001,
+                "capsule_purchased",
+                { kind = 0 / 0, rarity = "Rare" },
+                "invalid-capsule-id"
+            )
+        end)
+        assert(
+            callSucceeded and not nanEnumAccepted,
+            "non-finite enum values must be rejected safely"
+        )
+        assert(
+            #events == eventCountBeforeRejectedPayload,
+            "non-finite event values must not reach the writer"
+        )
         assert(telemetry:record(9001, "tutorial_mutation_completed", { theme = "Moss" }))
         assert(telemetry:record(9001, "slot_upgraded", { capacity = 3 }))
         assert(telemetry:record(9001, "first_raid_participated", { reason = "raid_start" }))
