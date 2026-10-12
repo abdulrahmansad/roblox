@@ -4823,6 +4823,47 @@ test(
             action = "PurchaseCapsule",
             payload = { kind = "Welcome" },
         }
+        local malformedFloodService = ActionService.new({
+            sessionService = {
+                getSession = function(_self, candidate)
+                    if candidate == player then
+                        return { userId = userId, sessionId = player.sessionId }
+                    end
+                    return nil
+                end,
+            },
+            raidService = {},
+            playerDataService = {},
+            economyService = {},
+            capsuleService = {},
+            mutationService = {},
+            theftService = {},
+            baseService = {
+                isOperational = function()
+                    return true
+                end,
+            },
+            requestEvent = {},
+            resultEvent = {},
+            domainEvent = {},
+            clock = function()
+                return now
+            end,
+        })
+        for _ = 1, 20 do
+            local malformed = malformedFloodService:handle(player, {
+                sessionId = player.sessionId,
+                action = "GetSnapshot",
+                payload = {},
+            })
+            assert(malformed == nil, "a request without an ID must not receive a response")
+        end
+        local afterMalformedFlood =
+            malformedFloodService:handle(player, { requestId = "valid-after-flood" })
+        assert(
+            not afterMalformedFlood.ok and afterMalformedFlood.code == "RateLimited",
+            "requests without IDs must still consume the transport limit"
+        )
         local first = actionService:handle(player, welcomeRequest)
         assert(
             first.ok and first.data.scrapBalance == 130,

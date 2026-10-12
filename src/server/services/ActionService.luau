@@ -467,11 +467,13 @@ function ActionService.handle(self: any, player: any, request: any): any?
     local requestId = if type(request) == "table" and type(request.requestId) == "string"
         then request.requestId
         else nil
-    if requestId == nil or #requestId < 1 or #requestId > 64 then
+    local hasValidRequestId = requestId ~= nil and #requestId >= 1 and #requestId <= 64
+    local transportLimited = self:_isTransportLimited(session.userId)
+    if not hasValidRequestId then
         return nil
     end
 
-    if self:_isTransportLimited(session.userId) then
+    if transportLimited then
         return self:_response(session, requestId, false, "RateLimited", nil, nil)
     end
     if not Protocol.isValidActionRequest(request) then
