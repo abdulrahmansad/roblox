@@ -25,6 +25,7 @@ Status: V1 implementation is in progress; M1–M9 portable implementations pass,
 - Local-only verification (2026-10-13): at the user's request, StyLua check, Selene, all 94 Lune tests, and playtest-summary fixture checks passed without Studio MCP or Rojo. No source code changed; this adds no Studio gameplay, live persistence, performance, or Rojo-build evidence.
 - M8 static touch-target review (2026-10-13): inspected every `TextButton` construction path in `OnboardingController`. Menu and intro controls use the shared 56 px minimum height; context action is 64 px high; settings, close, and previous/next controls are 56 px square. Responsive grid buttons remain above 52 px wide at the documented 360 px phone width. This verifies source dimensions only; physical-device touch and other viewport checks remain pending.
 - M9 offline audio-cue contract review (2026-10-13): the portable catalog test now asserts the exact 13 cue names, including every required gameplay moment, and validates each positive asset ID plus volume/playback bounds. Formatting, lint, 94 Lune tests, and the playtest-summary fixture pass without Rojo. Asset permissions, loading, and audible playback remain unverified in Studio.
+- Studio resource recheck (2026-10-13): no `RobloxStudioBeta` process is running, and Windows reports 0.15 GiB free of 5.85 GiB physical memory. No Studio session was started under this headroom; multiplayer, live persistence, and device validation remain pending.
 
 ## M3 — Capsules, sales, and capacity
 
