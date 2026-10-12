@@ -1576,13 +1576,38 @@ test("M9 visual catalogs, map zones, Codex, and audio cues match locked V1 scope
     expect(WorldConfig.ZONES[2] == "Commons")
     expect(WorldConfig.ZONES[3] == "ChaseLoop")
 
+    local expectedCueIds = {
+        CapsuleReveal = true,
+        MutationStart = true,
+        MutationReveal = true,
+        RarePlus = true,
+        RaidWarning = true,
+        RaidStart = true,
+        RaidEnd = true,
+        TheftInTransit = true,
+        TagDrop = true,
+        Recovery = true,
+        SuccessfulBank = true,
+        Escape = true,
+        IncomeTick = true,
+    }
     local cueCount = 0
     for cueId, cue in AudioCueConfig.CUES do
-        expect(type(cueId) == "string" and type(cue.assetId) == "number" and cue.assetId > 0)
+        expect(
+            type(cueId) == "string"
+                and expectedCueIds[cueId] == true
+                and type(cue.assetId) == "number"
+                and cue.assetId > 0,
+            "audio cue catalog contains an unknown or invalid cue"
+        )
+        expectedCueIds[cueId] = nil
         expect(cue.volume > 0 and cue.volume <= 1 and cue.playbackSpeed > 0)
         cueCount += 1
     end
     expect(cueCount == 13)
+    for cueId in expectedCueIds do
+        expect(false, "audio cue is missing: " .. cueId)
+    end
     expect(AudioCueConfig.INCOME_CUE_MIN_INTERVAL_SECONDS >= 30)
 
     local visualIdCount = 0
