@@ -18,6 +18,8 @@ local TagService = require("../src/server/services/TagService")
 local HudModel = require("../src/client/controllers/HudModel")
 local CodexModel = require("../src/client/controllers/CodexModel")
 local EconomyConfig = require("../src/shared/config/EconomyConfig")
+local CapsuleConfig = require("../src/shared/config/CapsuleConfig")
+local MutationConfig = require("../src/shared/config/MutationConfig")
 local RaidConfig = require("../src/shared/config/RaidConfig")
 local WorldConfig = require("../src/shared/config/WorldConfig")
 local AudioCueConfig = require("../src/shared/config/AudioCueConfig")
@@ -1356,6 +1358,45 @@ test("profile defaults contain the protected starter and exact starting economy"
     assert(profile.standardCapsulePity.belowRare == 0, "fresh profile must start with zero pity")
     assert(profile.discoveredSpeciesIds.Mossling, "starter species must be discovered")
     assert(profile.hasCompletedFirstRaid == false, "fresh profile has not completed a Raid")
+end)
+
+test("locked early economy model supports the minute-three spend-or-save choice", function()
+    local profile = PlayerDataService.createDefaultProfile(function()
+        return "balance-model-starter"
+    end)
+    profile.creatures[1].mutationFormId = "Cinder"
+
+    local starterIncome = HudModel.getIncomePerMinute(profile.creatures)
+    expect(starterIncome == 50, "the guided Common mutation should raise Mossling income to 50")
+
+    local uncommonIds = CreatureDefinitions.SpeciesIdsByRarity.Uncommon
+    local totalUncommonIncome = 0
+    for _, speciesId in uncommonIds do
+        totalUncommonIncome += CreatureDefinitions[speciesId].scrapPerMinute
+    end
+    local expectedUncommonIncome = totalUncommonIncome / #uncommonIds
+    expect(
+        expectedUncommonIncome == 76,
+        "the guaranteed Welcome species should average 76 Scrap/min"
+    )
+
+    local balanceAtNinetySeconds = EconomyConfig.STARTING_SCRAP + (starterIncome * 90 / 60)
+    expect(
+        balanceAtNinetySeconds == 125,
+        "the minute-one-thirty model should leave 5 after Welcome"
+    )
+
+    local expectedCombinedIncome = starterIncome + expectedUncommonIncome
+    local balanceAtThreeMinutes = balanceAtNinetySeconds
+        - CapsuleConfig.PRICE
+        + (expectedCombinedIncome * 90 / 60)
+    local mutationChoicePrice = MutationConfig.NORMAL_PRICE + MutationConfig.CATALYST_PRICE
+    expect(balanceAtThreeMinutes == 194, "the expected minute-three balance should match the model")
+    expect(
+        balanceAtThreeMinutes >= mutationChoicePrice
+            and balanceAtThreeMinutes < EconomyConfig.SLOT_3_PRICE,
+        "the player should be able to mutate or continue saving toward Slot 3"
+    )
 end)
 
 test("M8 HUD summarizes income, first-session goals, rarity labels, and action feedback", function()
