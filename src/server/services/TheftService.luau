@@ -13,6 +13,7 @@ local CreatureDefinitions = if game ~= nil
     then require(game:GetService("ReplicatedStorage").Shared.definitions.CreatureDefinitions)
     else require("../../shared/definitions/CreatureDefinitions")
 local PLAYER_ATTRIBUTES = Protocol.PlayerAttributeNames
+local TERMINAL_ATTEMPT_RETENTION_SECONDS = 120
 
 local TheftService = {}
 TheftService.__index = TheftService
@@ -1125,7 +1126,8 @@ function TheftService.step(self: any, now: number?): (boolean, string?)
         end
         if
             (attempt.state == "BANKED" or attempt.state == "RETURNED")
-            and timestamp - (attempt.terminalAt or timestamp) >= 120
+            and timestamp - (attempt.terminalAt or timestamp)
+                >= TERMINAL_ATTEMPT_RETENTION_SECONDS
         then
             self._attempts[attemptId] = nil
         end

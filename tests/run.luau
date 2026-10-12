@@ -3036,6 +3036,52 @@ test("creature attempts and theft limits remain fixed for each Raid", function()
     expect(banked.theftService._raidOwnerLosses[banked.ownerUserId] == "theft-raid-1")
 end)
 
+test("terminal theft attempts are retained for replay then pruned at 120 seconds", function()
+    local retentionSeconds = 120
+
+    local returnedContext = makeTheftContext()
+    local returned, returnedError = returnedContext.theftService:beginTheft(
+        returnedContext.thiefUserId,
+        returnedContext.targetId
+    )
+    expect(returned ~= nil and returnedError == nil)
+    expect(
+        returnedContext.theftService:cancelTheft(returnedContext.thiefUserId, returned.attemptId)
+    )
+    local returnedAttempt = returnedContext.theftService._attempts[returned.attemptId]
+    local returnedAt = returnedAttempt.terminalAt
+    expect(returnedAttempt.state == "RETURNED" and type(returnedAt) == "number")
+    expect(returnedContext.theftService:step(returnedAt + retentionSeconds - 0.001))
+    local returnedReplay, returnedReplayError =
+        returnedContext.theftService:cancelTheft(returnedContext.thiefUserId, returned.attemptId)
+    expect(returnedReplay ~= nil and returnedReplayError == nil)
+    expect(returnedContext.theftService:step(returnedAt + retentionSeconds))
+    local expiredReturn, expiredReturnError =
+        returnedContext.theftService:cancelTheft(returnedContext.thiefUserId, returned.attemptId)
+    expect(expiredReturn == nil and expiredReturnError == "NotOwner")
+
+    local bankedContext = makeTheftContext()
+    local bankedAttemptId = beginAndCarryTheft(bankedContext)
+    bankedContext.positions[bankedContext.thiefUserId] =
+        bankedContext.baseService:getHomePadPosition(bankedContext.thiefUserId)
+    expect(bankedContext.theftService:beginBank(bankedContext.thiefUserId, bankedAttemptId))
+    bankedContext.monotonicNow.value += RaidConfig.BANK_HOLD_SECONDS
+    expect(
+        bankedContext.theftService:completeBank(bankedContext.thiefUserId, bankedAttemptId, "Prism")
+    )
+    local bankedAttempt = bankedContext.theftService._attempts[bankedAttemptId]
+    local bankedAt = bankedAttempt.terminalAt
+    expect(bankedAttempt.state == "BANKED" and type(bankedAt) == "number")
+    expect(bankedContext.theftService:step(bankedAt + retentionSeconds - 0.001))
+    local bankReplay, bankReplayError =
+        bankedContext.theftService:completeBank(bankedContext.thiefUserId, bankedAttemptId, "Prism")
+    expect(bankReplay ~= nil and bankReplayError == nil)
+    expect(bankedContext.theftService:step(bankedAt + retentionSeconds))
+    local expiredBank, expiredBankError =
+        bankedContext.theftService:completeBank(bankedContext.thiefUserId, bankedAttemptId, "Prism")
+    expect(expiredBank == nil and expiredBankError == "NotOwner")
+end)
+
 test(
     "Tag cancels channels, drops carries, enforces cooldown, and recovery returns ownership",
     function()
