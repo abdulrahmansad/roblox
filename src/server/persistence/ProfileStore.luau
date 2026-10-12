@@ -9,6 +9,7 @@ local EXPIRES_KEY = "oddSessionExpiresAt"
 local SAVE_REVISION_KEY = "oddSaveRevision"
 local BACKUP_PREFIX = "Backup_Player_"
 local QUARANTINE_PREFIX = "Quarantine_"
+local MAX_SAFE_USER_ID = 9_007_199_254_740_991
 
 local function cloneValue(value: any): any
     if type(value) ~= "table" then
@@ -49,6 +50,16 @@ local function validInteger(value: any): boolean
         and value % 1 == 0
         and value >= 0
         and value <= 2_147_483_647
+end
+
+local function isValidUserId(value: any): boolean
+    return type(value) == "number"
+        and value == value
+        and value ~= math.huge
+        and value ~= -math.huge
+        and value % 1 == 0
+        and value >= 1
+        and value <= MAX_SAFE_USER_ID
 end
 
 local function getMetadata(keyInfo: any): { [string]: any }
@@ -361,7 +372,7 @@ function ProfileStore._restoreBackup(
 end
 
 function ProfileStore.load(self: any, userId: number, defaultProfile: any): (any?, string?)
-    if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
+    if not isValidUserId(userId) then
         return nil, "InvalidUserId"
     end
     if self._sessions[userId] ~= nil then
@@ -504,6 +515,9 @@ function ProfileStore.save(
     profile: any,
     release: boolean?
 ): (boolean, string?)
+    if not isValidUserId(userId) then
+        return false, "InvalidUserId"
+    end
     local token = self._sessions[userId]
     if token == nil then
         return false, "SessionNotLoaded"
@@ -583,6 +597,9 @@ function ProfileStore.save(
 end
 
 function ProfileStore.release(self: any, userId: number): (boolean, string?)
+    if not isValidUserId(userId) then
+        return false, "InvalidUserId"
+    end
     local token = self._sessions[userId]
     if token == nil then
         return true, nil

@@ -698,7 +698,7 @@ function PlayerDataService._startAutoSave(self: any, userId: number)
 end
 
 function PlayerDataService.load(self: any, userId: number): (boolean, string?)
-    if type(userId) ~= "number" or userId <= 0 or userId % 1 ~= 0 then
+    if not isValidUserId(userId) then
         return false, "InvalidUserId"
     end
     if self._profiles[userId] ~= nil then

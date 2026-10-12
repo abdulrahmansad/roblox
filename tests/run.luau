@@ -2054,6 +2054,36 @@ test("profile store retries transient failures with a bounded attempt count", fu
     assert(failingStore.calls == 3, "exhausted retries must not loop forever")
 end)
 
+test("profile persistence boundaries reject unsafe user IDs before touching storage", function()
+    local dataStore = makeFakeDataStore()
+    local profileStore = makeProfileStore(dataStore)
+    local defaults = PlayerDataService.createDefaultProfile(function()
+        return "unsafe-id-starter"
+    end)
+    local unsafeUserId = 9_007_199_254_740_992
+
+    local loaded, loadError = profileStore:load(unsafeUserId, defaults)
+    expect(loaded == nil and loadError == "InvalidUserId")
+    local saved, saveError = profileStore:save(unsafeUserId, defaults, false)
+    expect(not saved and saveError == "InvalidUserId")
+    local released, releaseError = profileStore:release(unsafeUserId)
+    expect(not released and releaseError == "InvalidUserId")
+
+    local dataService = PlayerDataService.new({
+        profileStore = profileStore,
+        clock = function()
+            return 1_000
+        end,
+        generateCreatureId = function()
+            return "unused-unsafe-id-starter"
+        end,
+        autoSaveEnabled = false,
+    })
+    local serviceLoaded, serviceLoadError = dataService:load(unsafeUserId)
+    expect(not serviceLoaded and serviceLoadError == "InvalidUserId")
+    expect(dataStore.calls == 0, "invalid IDs must not produce DataStore requests")
+end)
+
 test("player data saves balance and restores the same starter on rejoin", function()
     local dataStore = makeFakeDataStore()
     local profileStore = makeProfileStore(dataStore)
