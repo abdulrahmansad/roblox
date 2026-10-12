@@ -225,12 +225,20 @@ function TagService.step(self: any, now: number?): (boolean, string?)
             self._staggers[userId] = nil
         end
     end
+    for userId, cooldown in self._tagCooldowns do
+        if timestamp >= cooldown.endsAt then
+            self._tagCooldowns[userId] = nil
+        end
+    end
+    for userId, immunity in self._tagImmunity do
+        if timestamp >= immunity.endsAt then
+            self._tagImmunity[userId] = nil
+        end
+    end
     return true, nil
 end
 
 function TagService.onPlayerRemoving(self: any, userId: number)
-    self._tagCooldowns[userId] = nil
-    self._tagImmunity[userId] = nil
     local stagger = self._staggers[userId]
     if stagger ~= nil and stagger.movement ~= nil then
         local movement = stagger.movement

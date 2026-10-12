@@ -3154,6 +3154,104 @@ test(
     end
 )
 
+test("Tag cooldown and immunity survive disconnect during the same Raid", function()
+    local defenderReconnect = makeTheftContext({ extraOwnerTargets = 1, ownerCapacity = 3 })
+    local firstAttempt = defenderReconnect.theftService:beginTheft(
+        defenderReconnect.thiefUserId,
+        defenderReconnect.targetId
+    )
+    expect(firstAttempt ~= nil)
+    defenderReconnect.positions[defenderReconnect.ownerUserId] =
+        defenderReconnect.positions[defenderReconnect.thiefUserId]
+    local firstTag = defenderReconnect.tagService:tag(
+        defenderReconnect.ownerUserId,
+        defenderReconnect.thiefUserId
+    )
+    expect(firstTag ~= nil and firstTag.success)
+    defenderReconnect.tagService:onPlayerRemoving(defenderReconnect.ownerUserId)
+    defenderReconnect.monotonicNow.value += RaidConfig.TAG_IMMUNITY_SECONDS + 0.1
+    expect(defenderReconnect.tagService:step(defenderReconnect.monotonicNow.value))
+    defenderReconnect.positions[defenderReconnect.thiefUserId] =
+        defenderReconnect.baseService:getCreatureDisplayPosition(
+            defenderReconnect.ownerUserId,
+            "theft-extra-1"
+        )
+    local secondAttempt, secondAttemptError =
+        defenderReconnect.theftService:beginTheft(defenderReconnect.thiefUserId, "theft-extra-1")
+    expect(
+        secondAttempt ~= nil,
+        "the thief may use its second distinct attempt: " .. tostring(secondAttemptError)
+    )
+    defenderReconnect.positions[defenderReconnect.ownerUserId] =
+        defenderReconnect.positions[defenderReconnect.thiefUserId]
+    local tagAfterDefenderReconnect, defenderReconnectError = defenderReconnect.tagService:tag(
+        defenderReconnect.ownerUserId,
+        defenderReconnect.thiefUserId
+    )
+    expect(
+        tagAfterDefenderReconnect == nil and defenderReconnectError == "RateLimited",
+        "a defender reconnect must not reset the six-second Raid cooldown"
+    )
+    defenderReconnect.monotonicNow.value += RaidConfig.TAG_COOLDOWN_SECONDS - (RaidConfig.TAG_IMMUNITY_SECONDS + 0.1)
+    expect(defenderReconnect.tagService:step(defenderReconnect.monotonicNow.value))
+    expect(
+        defenderReconnect.tagService._tagCooldowns[defenderReconnect.ownerUserId] == nil,
+        "expired Tag cooldown entries are removed"
+    )
+
+    local thiefReconnect = makeTheftContext({
+        userIds = { 1_241, 1_242, 1_243 },
+        extraOwnerTargets = 1,
+        ownerCapacity = 3,
+    })
+    local taggedAttempt =
+        thiefReconnect.theftService:beginTheft(thiefReconnect.thiefUserId, thiefReconnect.targetId)
+    expect(taggedAttempt ~= nil)
+    thiefReconnect.positions[thiefReconnect.ownerUserId] =
+        thiefReconnect.positions[thiefReconnect.thiefUserId]
+    local tagged =
+        thiefReconnect.tagService:tag(thiefReconnect.ownerUserId, thiefReconnect.thiefUserId)
+    expect(tagged ~= nil and tagged.success)
+    thiefReconnect.theftService:onPlayerRemoving(thiefReconnect.thiefUserId)
+    thiefReconnect.tagService:onPlayerRemoving(thiefReconnect.thiefUserId)
+    thiefReconnect.players[thiefReconnect.thiefUserId] = {
+        UserId = thiefReconnect.thiefUserId,
+        attributes = {},
+    }
+    thiefReconnect.humanoids[thiefReconnect.thiefUserId] = {
+        WalkSpeed = 16,
+        JumpPower = 50,
+        JumpHeight = 7.2,
+        UseJumpPower = true,
+    }
+    thiefReconnect.positions[thiefReconnect.thiefUserId] =
+        thiefReconnect.baseService:getCreatureDisplayPosition(
+            thiefReconnect.ownerUserId,
+            "theft-extra-1"
+        )
+    local rejoinedAttempt =
+        thiefReconnect.theftService:beginTheft(thiefReconnect.thiefUserId, "theft-extra-1")
+    expect(rejoinedAttempt ~= nil, "a rejoined thief may use its remaining attempt")
+    thiefReconnect.positions[1_243] = thiefReconnect.positions[thiefReconnect.thiefUserId]
+    local tagAfterThiefReconnect = thiefReconnect.tagService:tag(1_243, thiefReconnect.thiefUserId)
+    expect(
+        tagAfterThiefReconnect ~= nil
+            and not tagAfterThiefReconnect.success
+            and tagAfterThiefReconnect.result == "Miss",
+        "a thief reconnect must not reset its five-second Tag immunity"
+    )
+    expect(
+        thiefReconnect.theftService._attempts[rejoinedAttempt.attemptId].state == "CHANNELING",
+        "immune Tag leaves the new channel intact"
+    )
+    thiefReconnect.monotonicNow.value += RaidConfig.TAG_IMMUNITY_SECONDS
+    expect(thiefReconnect.tagService:step(thiefReconnect.monotonicNow.value))
+    expect(
+        thiefReconnect.tagService._tagImmunity[thiefReconnect.thiefUserId] == nil,
+        "expired Tag immunity entries are removed"
+    )
+end)
+
 test("Tag rejects non-finite server-observed positions", function()
     local context = makeTheftContext()
     local attempt = context.theftService:beginTheft(context.thiefUserId, context.targetId)
