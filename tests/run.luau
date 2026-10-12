@@ -1364,6 +1364,10 @@ test("M8 HUD summarizes income, first-session goals, rarity labels, and action f
     end)
     local income = HudModel.getIncomePerMinute(profile.creatures)
     expect(income == 40 and HudModel.formatNumber(income) == "40")
+    expect(HudModel.formatDuration(60) == "01:00")
+    expect(HudModel.formatDuration(0.1) == "00:01")
+    expect(HudModel.formatDuration(-1) == "00:00")
+    expect(HudModel.formatDuration(math.huge) == "00:00")
     expect(
         string.find(HudModel.getGoal({ tutorialCompleted = false }), "free Common mutation") ~= nil
     )

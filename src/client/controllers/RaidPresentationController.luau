@@ -1,6 +1,5 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Protocol = require(ReplicatedStorage:WaitForChild("Shared").network.Protocol)
 local HudModel = require(script.Parent.HudModel)
@@ -25,6 +24,8 @@ local scrapLabel: TextLabel? = nil
 local incomeLabel: TextLabel? = nil
 local slotsLabel: TextLabel? = nil
 local started = false
+local renderLoopGeneration = 0
+local RENDER_INTERVAL_SECONDS = 0.25
 
 local function isFiniteNumber(value: any): boolean
     return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
@@ -157,32 +158,33 @@ local function readAttributes(player: Player)
     setState(nextState, serverTimeUnix)
 end
 
-local function formatDuration(seconds: number): string
-    local rounded = math.max(0, math.ceil(seconds))
-    local minutes = math.floor(rounded / 60)
-    local remainingSeconds = rounded % 60
-    return string.format("%02d:%02d", minutes, remainingSeconds)
-end
-
 local function render(player: Player)
     if state == nil or phaseLabel == nil or graceLabel == nil then
         return
     end
     local serverNow = state.serverTimeUnix + math.max(0, os.clock() - localSyncTime)
-    phaseLabel.Text =
-        string.format("%s  ·  %s", state.phase, formatDuration(state.phaseEndsAtUnix - serverNow))
+    local phaseText = string.format(
+        "%s  ·  %s",
+        state.phase,
+        HudModel.formatDuration(state.phaseEndsAtUnix - serverNow)
+    )
+    if phaseLabel.Text ~= phaseText then
+        phaseLabel.Text = phaseText
+    end
 
     local graceRaidId = player:GetAttribute(PLAYER_ATTRIBUTES.ArrivalGraceRaidId)
     local graceEndsAtUnix = player:GetAttribute(PLAYER_ATTRIBUTES.ArrivalGraceEndsAtUnix)
+    local graceText = ""
     if
         state.phase == "RAID"
         and graceRaidId == state.raidId
         and isFiniteNumber(graceEndsAtUnix)
         and graceEndsAtUnix > serverNow
     then
-        graceLabel.Text = "ARRIVAL GRACE  " .. formatDuration(graceEndsAtUnix - serverNow)
-    else
-        graceLabel.Text = ""
+        graceText = "ARRIVAL GRACE  " .. HudModel.formatDuration(graceEndsAtUnix - serverNow)
+    end
+    if graceLabel.Text ~= graceText then
+        graceLabel.Text = graceText
     end
 end
 
@@ -232,14 +234,16 @@ function controller.start(): boolean
     end
 
     table.insert(connections, domainEvent.OnClientEvent:Connect(onDomainEvent))
-    table.insert(
-        connections,
-        RunService.RenderStepped:Connect(function()
-            render(player)
-        end)
-    )
     readAttributes(player)
     started = true
+    renderLoopGeneration += 1
+    local generation = renderLoopGeneration
+    task.spawn(function()
+        while started and renderLoopGeneration == generation do
+            render(player)
+            task.wait(RENDER_INTERVAL_SECONDS)
+        end
+    end)
     return true
 end
 
@@ -268,6 +272,8 @@ function controller.setEconomyStatus(scrap: any, incomePerMinute: any, occupied:
 end
 
 function controller.stop()
+    started = false
+    renderLoopGeneration += 1
     for _, connection in connections do
         connection:Disconnect()
     end
@@ -282,7 +288,6 @@ function controller.stop()
     incomeLabel = nil
     slotsLabel = nil
     state = nil
-    started = false
 end
 
 return table.freeze(controller)

@@ -40,6 +40,21 @@ function HudModel.formatNumber(value: number): string
     return string.format("%.1f", value)
 end
 
+function HudModel.formatDuration(seconds: number): string
+    if
+        type(seconds) ~= "number"
+        or seconds ~= seconds
+        or seconds == math.huge
+        or seconds == -math.huge
+    then
+        return "00:00"
+    end
+    local rounded = math.max(0, math.ceil(seconds))
+    local minutes = math.floor(rounded / 60)
+    local remainingSeconds = rounded % 60
+    return string.format("%02d:%02d", minutes, remainingSeconds)
+end
+
 function HudModel.getIncomePerMinute(creatures: any): number
     if type(creatures) ~= "table" then
         return 0
