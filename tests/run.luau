@@ -1676,6 +1676,12 @@ test("only an equipped Mythic mutation is announced server-wide", function()
                         activeFormId = "Starforge",
                         codexFormAdded = true,
                     }
+                elseif transactionId == "mythic-unicode-offer" then
+                    return {
+                        outcome = "Replaced",
+                        activeFormId = "Starforge",
+                        codexFormAdded = true,
+                    }
                 elseif transactionId == "common-offer" then
                     return {
                         outcome = "Replaced",
@@ -1739,6 +1745,12 @@ test("only an equipped Mythic mutation is announced server-wide", function()
     now += 1
     expect(resolve("kept-resolve", "kept-offer", "KeepCurrent").ok)
     expect(#globalEvents == 1, "common and kept mutations are not announced")
+
+    player.DisplayName = string.rep("界", 11)
+    expect(resolve("mythic-unicode-resolve", "mythic-unicode-offer", "Replace").ok)
+    local unicodeAnnouncement = globalEvents[2]
+    expect(unicodeAnnouncement.data.playerDisplayName == string.rep("界", 10))
+    expect(utf8.len(unicodeAnnouncement.data.playerDisplayName) == 10)
 end)
 
 test("profile validation rejects corrupt fields and unknown schema versions", function()

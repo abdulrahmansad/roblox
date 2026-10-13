@@ -86,6 +86,19 @@ local function cloneValue(value: any): any
     return copy
 end
 
+local function boundedDisplayName(value: any): string?
+    if type(value) ~= "string" or #value == 0 then
+        return nil
+    end
+    for byteCount = math.min(#value, 32), 1, -1 do
+        local candidate = string.sub(value, 1, byteCount)
+        if utf8.len(candidate) ~= nil then
+            return candidate
+        end
+    end
+    return nil
+end
+
 local function valuesEqual(left: any, right: any): boolean
     if type(left) ~= type(right) then
         return false
@@ -658,19 +671,15 @@ function ActionService.handle(self: any, player: any, request: any): any?
                 if type(self._domainEvent.FireAllClients) ~= "function" then
                     return
                 end
-                local displayName = player.DisplayName
-                if type(displayName) ~= "string" or #displayName == 0 then
-                    displayName = player.Name
-                end
-                if type(displayName) ~= "string" or #displayName == 0 then
-                    displayName = "A player"
-                end
+                local displayName = boundedDisplayName(player.DisplayName)
+                    or boundedDisplayName(player.Name)
+                    or "A player"
                 self._domainEvent:FireAllClients({
                     event = Protocol.DomainEventNames.MythicEquipped,
                     revision = revision or 0,
                     serverTimeUnix = self._unixClock(),
                     data = {
-                        playerDisplayName = string.sub(displayName, 1, 32),
+                        playerDisplayName = displayName,
                         formId = data.activeFormId,
                     },
                 })
