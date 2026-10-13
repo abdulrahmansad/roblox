@@ -8,7 +8,7 @@ TestEZ 0.4.1 is a Wally development dependency for tests that require Roblox eng
 
 ## Studio integration and multiplayer
 
-Use Studio Test mode for client/server smoke checks. Use **Server & Clients** for multiplayer. Studio supports up to eight simulated clients; the current foundation includes a documented manual workflow in `tests/multiplayer/README.md`. `StudioTestService` supports plugin-driven multiplayer sessions, mid-session joins, and disconnects. Never describe Lune as multiplayer simulation. See the [official Studio testing modes](https://create.roblox.com/docs/studio/testing-modes) and [StudioTestService API](https://create.roblox.com/docs/reference/engine/classes/StudioTestService).
+Use Studio Test mode for client/server smoke checks. Use **Server & Clients** for multiplayer. Studio supports up to eight simulated clients; the current foundation includes a documented workflow in `tests/multiplayer/README.md`. Before starting Play, run `./scripts/check-studio-memory.ps1 -ClientCount N`; it refuses the preflight below 1 GiB for one client, 2 GiB for 2–5 clients, or 4 GiB for 6–8 clients. `StudioTestService` supports plugin-driven multiplayer sessions, mid-session joins, and disconnects. Never describe Lune as multiplayer simulation. See the [official Studio testing modes](https://create.roblox.com/docs/studio/testing-modes) and [StudioTestService API](https://create.roblox.com/docs/reference/engine/classes/StudioTestService).
 
 To run the current TestEZ specs in Studio's server command bar after syncing with Rojo:
 
