@@ -17,7 +17,7 @@ jobs:
           version: v1.2.0
       - name: Install pinned project tools and packages
         shell: pwsh
-        run: ./scripts/setup.ps1
+        run: ./scripts/setup.ps1 -NoTrustCheck
       - name: Verify
         shell: pwsh
         run: ./scripts/verify.ps1

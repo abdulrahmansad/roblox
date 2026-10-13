@@ -1,3 +1,7 @@
+param(
+    [switch]$NoTrustCheck
+)
+
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 Set-Location $script:RepoRoot
@@ -21,7 +25,11 @@ if ($version -lt [version]'1.2.0') {
     throw "Rokit 1.2.0 or newer is required; found $versionText"
 }
 
-& rokit install
+if ($NoTrustCheck) {
+    & rokit install --no-trust-check
+} else {
+    & rokit install
+}
 if ($LASTEXITCODE -ne 0) { throw 'rokit install failed.' }
 
 & wally install
